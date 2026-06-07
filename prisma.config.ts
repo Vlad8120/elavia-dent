@@ -3,7 +3,7 @@ import { defineConfig } from "prisma/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import pg from "pg";
 
-const connectionString = `postgresql://postgres@localhost:5432/elavia_dent`;
+const connectionString = process.env.DATABASE_URL || `postgresql://postgres@localhost:5432/elavia_dent`;
 
 const pool = new pg.Pool({ connectionString });
 

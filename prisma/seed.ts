@@ -3,14 +3,15 @@ const { PrismaPg } = require("@prisma/adapter-pg");
 const { Pool } = require("pg");
 const bcrypt = require("bcryptjs");
 
-const pool = new Pool({
-  connectionString: "postgresql://postgres@localhost:5432/elavia_dent",
-});
+const connectionString = process.env.DATABASE_URL || "postgresql://postgres@localhost:5432/elavia_dent";
+
+const pool = new Pool({ connectionString });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
   console.log("Починаємо заповнення бази даних...");
+  console.log("Підключення до:", connectionString.substring(0, 50) + "...");
 
   const categories = await Promise.all([
     prisma.category.upsert({ where: { slug: "equipment" }, update: {}, create: { name: "Стоматологічне обладнання", icon: "🦷", slug: "equipment" } }),
