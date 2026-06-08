@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useApp } from "@/app/lib/context";
 
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+
 interface Props {
   product: any;
   onClose: () => void;
@@ -46,12 +48,10 @@ export default function ChatModal({ product, onClose }: Props) {
 
   async function loadMessages() {
     try {
-      const res = await fetch(`http://localhost:5000/api/messages/${productId}`, {
+      const res = await fetch(`${API}/messages/${productId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      console.log("loadMessages статус:", res.status);
       const data = await res.json();
-      console.log("loadMessages дані:", data);
       if (data.success) setMessages(data.data || []);
     } catch (e) {
       console.error("loadMessages помилка:", e);
@@ -65,12 +65,11 @@ export default function ChatModal({ product, onClose }: Props) {
     if (!text.trim()) return;
     if (!user) { setError("Потрібно увійти"); return; }
 
-    console.log("Відправка:", { text, receiverId, productId, token: token?.slice(0, 20) });
     setSending(true);
     setError("");
 
     try {
-      const res = await fetch("http://localhost:5000/api/messages", {
+      const res = await fetch(`${API}/messages`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -83,9 +82,7 @@ export default function ChatModal({ product, onClose }: Props) {
         }),
       });
 
-      console.log("Статус відповіді:", res.status);
       const data = await res.json();
-      console.log("Відповідь сервера:", data);
 
       if (data.success) {
         setMessages(prev => [...prev, data.data]);
@@ -95,7 +92,7 @@ export default function ChatModal({ product, onClose }: Props) {
         setError(data.message || "Помилка відправки");
       }
     } catch (err) {
-      console.error("Помилка fetch:", err);
+      console.error("Помилка:", err);
       setError("Помилка з'єднання з сервером");
     } finally {
       setSending(false);
@@ -192,7 +189,7 @@ export default function ChatModal({ product, onClose }: Props) {
             onChange={e => setText(e.target.value)}
             placeholder="Написати повідомлення…"
             disabled={sending}
-            className="flex-1 px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            className="flex-1 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:opacity-50"
           />
           <button
             type="submit"
