@@ -108,13 +108,14 @@ app.get("/api/chats", auth, async (req: any, res: any) => {
       const key = msg.productId;
       if (!chatsMap.has(key)) {
         const otherUser = msg.senderId === userId ? msg.receiver : msg.sender;
+        const isBuying = msg.product?.sellerId !== userId;
         chatsMap.set(key, {
           productId: msg.productId,
           product: msg.product,
           lastMessage: msg,
           otherUser,
           unread: 0,
-          isBuying: msg.product?.sellerId !== userId,
+          isBuying,
         });
       }
       if (!msg.isRead && msg.receiverId === userId) {
@@ -123,8 +124,10 @@ app.get("/api/chats", auth, async (req: any, res: any) => {
     }
 
     const chats = Array.from(chatsMap.values());
+    console.log(`Chats for user ${userId}:`, chats.length);
     res.json({ success: true, data: chats });
-  } catch {
+  } catch (error) {
+    console.error("Chats error:", error);
     res.status(500).json({ success: false, message: "Помилка сервера" });
   }
 });
