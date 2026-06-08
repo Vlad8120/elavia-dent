@@ -1,20 +1,43 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useApp } from "@/app/lib/context";
 
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+
 export default function Header() {
-  const { navigate, user, logout, favorites, searchQuery, setSearchQuery } = useApp();
+  const { navigate, user, logout, favorites, searchQuery, setSearchQuery, token } = useApp();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!user || !token) return;
+    loadUnread();
+    const interval = setInterval(loadUnread, 10000);
+    return () => clearInterval(interval);
+  }, [user, token]);
+
+  async function loadUnread() {
+    try {
+      const res = await fetch(`${API}/chats`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        const total = (data.data || []).reduce((sum: number, c: any) => sum + c.unread, 0);
+        setUnreadCount(total);
+      }
+    } catch {}
+  }
 
   const navLinks = [
-  { label: "Товари", page: "marketplace" },
-  { label: "Клініки", page: "clinics" },
-  { label: "Послуги", page: "services" },
-  { label: "Карта клінік", page: "clinics-map" },
-  { label: "Аналітика цін", page: "analytics" },
-];
+    { label: "Товари", page: "marketplace" },
+    { label: "Клініки", page: "clinics" },
+    { label: "Послуги", page: "services" },
+    { label: "Карта клінік", page: "clinics-map" },
+    { label: "Аналітика цін", page: "analytics" },
+  ];
 
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
@@ -35,7 +58,7 @@ export default function Header() {
             onChange={e => setSearchQuery(e.target.value)}
             onKeyDown={e => e.key === "Enter" && navigate("search")}
             placeholder="Пошук товарів, клінік, послуг…"
-            className="w-full px-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+            className="w-full px-4 py-2 text-sm text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           />
         </div>
 
@@ -57,6 +80,20 @@ export default function Header() {
                 className="hidden sm:flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50">
                 + Додати
               </button>
+
+              {/* Іконка повідомлень */}
+              <button
+                onClick={() => navigate("messages")}
+                className="relative w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-100">
+                <span className="text-lg">💬</span>
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-600 text-white text-xs rounded-full flex items-center justify-center font-bold">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Обране */}
               <button onClick={() => navigate("favorites")}
                 className="relative w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-100">
                 <span className="text-lg">♡</span>
@@ -66,6 +103,8 @@ export default function Header() {
                   </span>
                 )}
               </button>
+
+              {/* Меню користувача */}
               <div className="relative">
                 <button onClick={() => setUserMenuOpen(!userMenuOpen)}
                   className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-100">
@@ -81,6 +120,7 @@ export default function Header() {
                     </div>
                     {[
                       { label: "Профіль", page: "profile" },
+                      { label: "Повідомлення", page: "messages" },
                       { label: "Обране", page: "favorites" },
                       { label: "Мої оголошення", page: "my-listings" },
                       { label: "Адмін-панель", page: "admin" },
@@ -128,7 +168,7 @@ export default function Header() {
             onChange={e => setSearchQuery(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") { navigate("search"); setMobileOpen(false); }}}
             placeholder="Пошук…"
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg mb-3 focus:outline-none bg-gray-50"
+            className="w-full px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-lg mb-3 focus:outline-none bg-white"
           />
           <nav className="flex flex-col gap-1">
             {navLinks.map(l => (

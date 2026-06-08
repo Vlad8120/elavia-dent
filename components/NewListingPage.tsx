@@ -12,6 +12,9 @@ const OBLASTS: Record<string, string> = {
   "Вінниця": "Вінницька", "Запоріжжя": "Запорізька", "Полтава": "Полтавська",
 };
 
+const inputCls = "w-full px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
+const selectCls = "w-full px-3 py-2.5 text-sm text-gray-900 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
+
 export default function NewListingPage() {
   const { user, navigate, token } = useApp();
   const [categories, setCategories] = useState([]);
@@ -27,9 +30,7 @@ export default function NewListingPage() {
 
   useEffect(() => {
     fetchCategories().then(data => setCategories(data || []));
-    if (user) {
-      setForm(prev => ({ ...prev, contactEmail: user.email || "" }));
-    }
+    if (user) setForm(prev => ({ ...prev, contactEmail: user.email || "" }));
   }, [user]);
 
   if (!user) { navigate("login"); return null; }
@@ -49,7 +50,7 @@ export default function NewListingPage() {
         (form.contactPhone ? `\n📞 ${form.contactPhone}` : "") +
         (form.contactEmail ? `\n📧 ${form.contactEmail}` : "");
 
-      const res = await fetch("http://localhost:5000/api/products", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}/products`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -108,7 +109,6 @@ export default function NewListingPage() {
         <div className="bg-white rounded-2xl border border-gray-200 p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
 
-            {/* Фото */}
             <div>
               <label className="text-xs font-medium text-gray-700 block mb-1">Фото товару (до 10 штук)</label>
               <ImageUpload onUpload={(urls) => setImageUrls(urls)} currentImages={imageUrls} />
@@ -128,33 +128,41 @@ export default function NewListingPage() {
               </div>
             )}
 
-            {/* Назва */}
             <div>
               <label className="text-xs font-medium text-gray-700 block mb-1">Назва товару *</label>
-              <input value={form.title} onChange={e => handleChange("title", e.target.value)}
+              <input
+                value={form.title}
+                onChange={e => handleChange("title", e.target.value)}
                 placeholder="Напр.: Стоматологічна установка KAVO"
-                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                className={inputCls}
+              />
             </div>
 
-            {/* Опис */}
             <div>
               <label className="text-xs font-medium text-gray-700 block mb-1">Опис *</label>
-              <textarea value={form.description} onChange={e => handleChange("description", e.target.value)}
-                rows={4} placeholder="Детальний опис товару…"
-                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+              <textarea
+                value={form.description}
+                onChange={e => handleChange("description", e.target.value)}
+                rows={4}
+                placeholder="Детальний опис товару…"
+                className={`${inputCls} resize-none`}
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-gray-700 block mb-1">Ціна (UAH) *</label>
-                <input value={form.price} onChange={e => handleChange("price", e.target.value)}
-                  type="number" placeholder="0"
-                  className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <input
+                  value={form.price}
+                  onChange={e => handleChange("price", e.target.value)}
+                  type="number"
+                  placeholder="0"
+                  className={inputCls}
+                />
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-700 block mb-1">Стан</label>
-                <select value={form.condition} onChange={e => handleChange("condition", e.target.value)}
-                  className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                <select value={form.condition} onChange={e => handleChange("condition", e.target.value)} className={selectCls}>
                   <option value="NEW">Новий</option>
                   <option value="USED">Б/у</option>
                 </select>
@@ -164,37 +172,41 @@ export default function NewListingPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-gray-700 block mb-1">Місто *</label>
-                <select value={form.city} onChange={e => handleChange("city", e.target.value)}
-                  className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                <select value={form.city} onChange={e => handleChange("city", e.target.value)} className={selectCls}>
                   <option value="">Оберіть місто</option>
                   {CITIES.map(c => <option key={c}>{c}</option>)}
                 </select>
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-700 block mb-1">Категорія *</label>
-                <select value={form.categoryId} onChange={e => handleChange("categoryId", e.target.value)}
-                  className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                <select value={form.categoryId} onChange={e => handleChange("categoryId", e.target.value)} className={selectCls}>
                   <option value="">Оберіть категорію</option>
                   {categories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
             </div>
 
-            {/* Контакти */}
             <div className="border-t border-gray-100 pt-4">
               <h3 className="text-sm font-semibold text-gray-900 mb-3">📞 Контактна інформація</h3>
               <div className="space-y-3">
                 <div>
                   <label className="text-xs font-medium text-gray-700 block mb-1">Телефон</label>
-                  <input value={form.contactPhone} onChange={e => handleChange("contactPhone", e.target.value)}
+                  <input
+                    value={form.contactPhone}
+                    onChange={e => handleChange("contactPhone", e.target.value)}
                     placeholder="+38 000 000-00-00"
-                    className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    className={inputCls}
+                  />
                 </div>
                 <div>
                   <label className="text-xs font-medium text-gray-700 block mb-1">Email</label>
-                  <input value={form.contactEmail} onChange={e => handleChange("contactEmail", e.target.value)}
-                    type="email" placeholder="example@email.com"
-                    className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input
+                    value={form.contactEmail}
+                    onChange={e => handleChange("contactEmail", e.target.value)}
+                    type="email"
+                    placeholder="example@email.com"
+                    className={inputCls}
+                  />
                 </div>
               </div>
             </div>

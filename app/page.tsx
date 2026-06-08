@@ -29,6 +29,7 @@ import PrivacyPage from "@/components/PrivacyPage";
 import ClinicsMapPage from "@/components/ClinicsMapPage";
 import ComparePage from "@/components/ComparePage";
 import CompareWidget from "@/components/CompareWidget";
+import MessagesPage from "@/components/MessagesPage";
 import { fetchProducts, fetchClinics, fetchCategories } from "@/app/lib/api";
 
 function HomePage() {
@@ -220,6 +221,7 @@ export default function Page() {
       case "privacy": return <PrivacyPage />;
       case "clinics-map": return <ClinicsMapPage />;
       case "compare": return <ComparePage />;
+      case "messages": return <MessagesPage />;
       default: return <HomePage />;
     }
   };

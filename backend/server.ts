@@ -25,7 +25,6 @@ app.use("/api/services", servicesRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/categories", categoriesRouter);
 
-// Middleware авторизації
 function auth(req: any, res: any, next: any) {
   try {
     const token = req.headers.authorization?.split(" ")[1];
@@ -38,7 +37,7 @@ function auth(req: any, res: any, next: any) {
   }
 }
 
-// Messages routes
+// Messages
 app.get("/api/messages/:productId", auth, async (req: any, res: any) => {
   try {
     const userId = req.userId;
@@ -55,7 +54,7 @@ app.get("/api/messages/:productId", auth, async (req: any, res: any) => {
       orderBy: { createdAt: "asc" },
     });
     res.json({ success: true, data: messages });
-  } catch (error) {
+  } catch {
     res.status(500).json({ success: false, message: "Помилка сервера" });
   }
 });
@@ -80,7 +79,67 @@ app.post("/api/messages", auth, async (req: any, res: any) => {
       },
     });
     res.status(201).json({ success: true, data: message });
-  } catch (error) {
+  } catch {
+    res.status(500).json({ success: false, message: "Помилка сервера" });
+  }
+});
+
+// Список чатів
+app.get("/api/chats", auth, async (req: any, res: any) => {
+  try {
+    const userId = req.userId;
+
+    const messages = await prisma.message.findMany({
+      where: {
+        OR: [{ senderId: userId }, { receiverId: userId }],
+      },
+      include: {
+        sender: { select: { id: true, name: true } },
+        receiver: { select: { id: true, name: true } },
+        product: {
+          select: { id: true, title: true, image: true, price: true, sellerId: true },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const chatsMap = new Map();
+    for (const msg of messages) {
+      const key = msg.productId;
+      if (!chatsMap.has(key)) {
+        const otherUser = msg.senderId === userId ? msg.receiver : msg.sender;
+        chatsMap.set(key, {
+          productId: msg.productId,
+          product: msg.product,
+          lastMessage: msg,
+          otherUser,
+          unread: 0,
+          isBuying: msg.product?.sellerId !== userId,
+        });
+      }
+      if (!msg.isRead && msg.receiverId === userId) {
+        chatsMap.get(key).unread++;
+      }
+    }
+
+    const chats = Array.from(chatsMap.values());
+    res.json({ success: true, data: chats });
+  } catch {
+    res.status(500).json({ success: false, message: "Помилка сервера" });
+  }
+});
+
+// Позначити як прочитане
+app.put("/api/messages/read/:productId", auth, async (req: any, res: any) => {
+  try {
+    const userId = req.userId;
+    const productId = Number(req.params.productId);
+    await prisma.message.updateMany({
+      where: { productId, receiverId: userId, isRead: false },
+      data: { isRead: true },
+    });
+    res.json({ success: true });
+  } catch {
     res.status(500).json({ success: false, message: "Помилка сервера" });
   }
 });
