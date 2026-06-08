@@ -5,12 +5,34 @@ import { useApp } from "@/app/lib/context";
 import { fetchCategories } from "@/app/lib/api";
 import ImageUpload from "@/components/ImageUpload";
 
-const CITIES = ["Київ", "Львів", "Одеса", "Дніпро", "Харків", "Вінниця", "Запоріжжя", "Полтава"];
-const OBLASTS: Record<string, string> = {
-  "Київ": "Київська", "Львів": "Львівська", "Одеса": "Одеська",
-  "Дніпро": "Дніпропетровська", "Харків": "Харківська",
-  "Вінниця": "Вінницька", "Запоріжжя": "Запорізька", "Полтава": "Полтавська",
+const OBLASTS_CITIES: Record<string, string[]> = {
+  "Київська": ["Київ", "Біла Церква", "Бровари", "Ірпінь", "Буча", "Боярка", "Васильків", "Фастів", "Обухів", "Переяслав", "Бориспіль", "Вишневе", "Бучанський"],
+  "Харківська": ["Харків", "Лозова", "Ізюм", "Куп'янськ", "Балаклія", "Чугуїв", "Охтирка", "Богодухів", "Вовчанськ"],
+  "Одеська": ["Одеса", "Ізмаїл", "Білгород-Дністровський", "Южне", "Теплодар", "Іллічівськ", "Котовськ", "Балта", "Подільськ"],
+  "Дніпропетровська": ["Дніпро", "Кривий Ріг", "Нікополь", "Павлоград", "Кам'янське", "Жовті Води", "Марганець", "Орджонікідзе", "Першотравенськ"],
+  "Запорізька": ["Запоріжжя", "Бердянськ", "Мелітополь", "Енергодар", "Токмак", "Пологи", "Гуляйполе", "Василівка"],
+  "Львівська": ["Львів", "Дрогобич", "Трускавець", "Стрий", "Борислав", "Червоноград", "Самбір", "Яворів", "Броди", "Золочів", "Мостиська"],
+  "Вінницька": ["Вінниця", "Бар", "Козятин", "Могилів-Подільський", "Жмеринка", "Гайсин", "Тульчин", "Хмільник", "Погребище"],
+  "Миколаївська": ["Миколаїв", "Первомайськ", "Вознесенськ", "Южноукраїнськ", "Баштанка", "Нова Одеса"],
+  "Херсонська": ["Херсон", "Нова Каховка", "Генічеськ", "Скадовськ", "Каховка", "Цюрупинськ", "Таврійськ"],
+  "Полтавська": ["Полтава", "Кременчук", "Лубни", "Миргород", "Горішні Плавні", "Пирятин", "Гадяч", "Зіньків"],
+  "Чернігівська": ["Чернігів", "Ніжин", "Конотоп", "Прилуки", "Борзна", "Батурин", "Бахмач", "Новгород-Сіверський"],
+  "Черкаська": ["Черкаси", "Умань", "Золотоноша", "Канів", "Сміла", "Тальне", "Ватутіне", "Монастирище"],
+  "Житомирська": ["Житомир", "Бердичів", "Коростень", "Новоград-Волинський", "Малин", "Радомишль", "Коростишів"],
+  "Сумська": ["Суми", "Охтирка", "Ромни", "Лебедин", "Шостка", "Конотоп", "Глухів", "Путивль", "Тростянець"],
+  "Хмельницька": ["Хмельницький", "Кам'янець-Подільський", "Шепетівка", "Нетішин", "Старокостянтинів", "Славута", "Дунаївці"],
+  "Рівненська": ["Рівне", "Дубно", "Острог", "Костопіль", "Сарни", "Рокитне", "Здолбунів", "Корець"],
+  "Івано-Франківська": ["Івано-Франківськ", "Коломия", "Калуш", "Надвірна", "Болехів", "Бурштин", "Снятин", "Городенка", "Долина", "Рогатин"],
+  "Тернопільська": ["Тернопіль", "Чортків", "Бережани", "Збараж", "Кременець", "Борщів", "Бучач", "Теребовля"],
+  "Волинська": ["Луцьк", "Ковель", "Нововолинськ", "Рожище", "Любомль", "Горохів", "Камінь-Каширський"],
+  "Закарпатська": ["Ужгород", "Мукачево", "Берегово", "Хуст", "Виноградів", "Тячів", "Рахів", "Свалява"],
+  "Чернівецька": ["Чернівці", "Новодністровськ", "Хотин", "Сторожинець", "Герца", "Кіцмань", "Вижниця"],
+  "Кіровоградська": ["Кропивницький", "Олександрія", "Знам'янка", "Світловодськ", "Гайворон", "Помічна"],
+  "Донецька": ["Краматорськ", "Слов'янськ", "Маріуполь", "Бахмут", "Покровськ", "Костянтинівка", "Дружківка"],
+  "Луганська": ["Сєвєродонецьк", "Лисичанськ", "Рубіжне", "Старобільськ", "Попасна", "Кремінна"],
 };
+
+const ALL_OBLASTS = Object.keys(OBLASTS_CITIES).sort();
 
 const inputCls = "w-full px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
 const selectCls = "w-full px-3 py-2.5 text-sm text-gray-900 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
@@ -22,6 +44,7 @@ export default function NewListingPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [selectedOblast, setSelectedOblast] = useState("");
   const [form, setForm] = useState({
     title: "", description: "", price: "", city: "",
     condition: "NEW", categoryId: "", image: "🦷",
@@ -37,6 +60,11 @@ export default function NewListingPage() {
 
   function handleChange(key: string, value: string) {
     setForm(prev => ({ ...prev, [key]: value }));
+  }
+
+  function handleOblastChange(oblast: string) {
+    setSelectedOblast(oblast);
+    setForm(prev => ({ ...prev, city: "" }));
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -58,7 +86,7 @@ export default function NewListingPage() {
           description,
           price: Number(form.price),
           city: form.city,
-          oblast: OBLASTS[form.city] || "",
+          oblast: selectedOblast,
           condition: form.condition,
           categoryId: Number(form.categoryId),
           sellerId: user.id,
@@ -87,7 +115,7 @@ export default function NewListingPage() {
               До маркетплейсу
             </button>
             <button onClick={() => {
-              setSubmitted(false); setImageUrls([]);
+              setSubmitted(false); setImageUrls([]); setSelectedOblast("");
               setForm({ title: "", description: "", price: "", city: "", condition: "NEW", categoryId: "", image: "🦷", contactPhone: "", contactEmail: user.email || "" });
             }}
               className="px-6 py-2.5 border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 font-medium text-sm">
@@ -130,35 +158,21 @@ export default function NewListingPage() {
 
             <div>
               <label className="text-xs font-medium text-gray-700 block mb-1">Назва товару *</label>
-              <input
-                value={form.title}
-                onChange={e => handleChange("title", e.target.value)}
-                placeholder="Напр.: Стоматологічна установка KAVO"
-                className={inputCls}
-              />
+              <input value={form.title} onChange={e => handleChange("title", e.target.value)}
+                placeholder="Напр.: Стоматологічна установка KAVO" className={inputCls} />
             </div>
 
             <div>
               <label className="text-xs font-medium text-gray-700 block mb-1">Опис *</label>
-              <textarea
-                value={form.description}
-                onChange={e => handleChange("description", e.target.value)}
-                rows={4}
-                placeholder="Детальний опис товару…"
-                className={`${inputCls} resize-none`}
-              />
+              <textarea value={form.description} onChange={e => handleChange("description", e.target.value)}
+                rows={4} placeholder="Детальний опис товару…" className={`${inputCls} resize-none`} />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-gray-700 block mb-1">Ціна (UAH) *</label>
-                <input
-                  value={form.price}
-                  onChange={e => handleChange("price", e.target.value)}
-                  type="number"
-                  placeholder="0"
-                  className={inputCls}
-                />
+                <input value={form.price} onChange={e => handleChange("price", e.target.value)}
+                  type="number" placeholder="0" className={inputCls} />
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-700 block mb-1">Стан</label>
@@ -169,21 +183,33 @@ export default function NewListingPage() {
               </div>
             </div>
 
+            {/* Область і місто */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-medium text-gray-700 block mb-1">Місто *</label>
-                <select value={form.city} onChange={e => handleChange("city", e.target.value)} className={selectCls}>
-                  <option value="">Оберіть місто</option>
-                  {CITIES.map(c => <option key={c}>{c}</option>)}
+                <label className="text-xs font-medium text-gray-700 block mb-1">Область *</label>
+                <select value={selectedOblast} onChange={e => handleOblastChange(e.target.value)} className={selectCls}>
+                  <option value="">Оберіть область</option>
+                  {ALL_OBLASTS.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
               <div>
-                <label className="text-xs font-medium text-gray-700 block mb-1">Категорія *</label>
-                <select value={form.categoryId} onChange={e => handleChange("categoryId", e.target.value)} className={selectCls}>
-                  <option value="">Оберіть категорію</option>
-                  {categories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                <label className="text-xs font-medium text-gray-700 block mb-1">Місто *</label>
+                <select value={form.city} onChange={e => handleChange("city", e.target.value)}
+                  disabled={!selectedOblast} className={selectCls}>
+                  <option value="">Оберіть місто</option>
+                  {selectedOblast && OBLASTS_CITIES[selectedOblast]?.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
                 </select>
               </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-gray-700 block mb-1">Категорія *</label>
+              <select value={form.categoryId} onChange={e => handleChange("categoryId", e.target.value)} className={selectCls}>
+                <option value="">Оберіть категорію</option>
+                {categories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
             </div>
 
             <div className="border-t border-gray-100 pt-4">
@@ -191,22 +217,13 @@ export default function NewListingPage() {
               <div className="space-y-3">
                 <div>
                   <label className="text-xs font-medium text-gray-700 block mb-1">Телефон</label>
-                  <input
-                    value={form.contactPhone}
-                    onChange={e => handleChange("contactPhone", e.target.value)}
-                    placeholder="+38 000 000-00-00"
-                    className={inputCls}
-                  />
+                  <input value={form.contactPhone} onChange={e => handleChange("contactPhone", e.target.value)}
+                    placeholder="+38 000 000-00-00" className={inputCls} />
                 </div>
                 <div>
                   <label className="text-xs font-medium text-gray-700 block mb-1">Email</label>
-                  <input
-                    value={form.contactEmail}
-                    onChange={e => handleChange("contactEmail", e.target.value)}
-                    type="email"
-                    placeholder="example@email.com"
-                    className={inputCls}
-                  />
+                  <input value={form.contactEmail} onChange={e => handleChange("contactEmail", e.target.value)}
+                    type="email" placeholder="example@email.com" className={inputCls} />
                 </div>
               </div>
             </div>
