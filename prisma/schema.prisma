@@ -63,8 +63,9 @@ model Product {
   sellerId    Int
   seller      User      @relation(fields: [sellerId], references: [id])
 
-  favorites   Favorite[]
-  messages    Message[]
+  favorites    Favorite[]
+  messages     Message[]
+  priceHistory PriceHistory[]
 }
 
 enum Condition {
@@ -156,4 +157,14 @@ model Message {
   sender     User     @relation("SentMessages", fields: [senderId], references: [id])
   receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
   product    Product  @relation(fields: [productId], references: [id])
+}
+
+// Історія цін
+model PriceHistory {
+  id        Int      @id @default(autoincrement())
+  price     Float
+  createdAt DateTime @default(now())
+  productId Int
+
+  product   Product  @relation(fields: [productId], references: [id])
 }

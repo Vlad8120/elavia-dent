@@ -43,10 +43,7 @@ app.get("/api/messages/:productId", auth, async (req: any, res: any) => {
     const userId = req.userId;
     const productId = Number(req.params.productId);
     const messages = await prisma.message.findMany({
-      where: {
-        productId,
-        OR: [{ senderId: userId }, { receiverId: userId }],
-      },
+      where: { productId, OR: [{ senderId: userId }, { receiverId: userId }] },
       include: {
         sender: { select: { id: true, name: true } },
         receiver: { select: { id: true, name: true } },
@@ -67,12 +64,7 @@ app.post("/api/messages", auth, async (req: any, res: any) => {
       return res.status(400).json({ success: false, message: "Заповніть всі поля" });
     }
     const message = await prisma.message.create({
-      data: {
-        text,
-        senderId,
-        receiverId: Number(receiverId),
-        productId: Number(productId),
-      },
+      data: { text, senderId, receiverId: Number(receiverId), productId: Number(productId) },
       include: {
         sender: { select: { id: true, name: true } },
         receiver: { select: { id: true, name: true } },
@@ -88,17 +80,12 @@ app.post("/api/messages", auth, async (req: any, res: any) => {
 app.get("/api/chats", auth, async (req: any, res: any) => {
   try {
     const userId = req.userId;
-
     const messages = await prisma.message.findMany({
-      where: {
-        OR: [{ senderId: userId }, { receiverId: userId }],
-      },
+      where: { OR: [{ senderId: userId }, { receiverId: userId }] },
       include: {
         sender: { select: { id: true, name: true } },
         receiver: { select: { id: true, name: true } },
-        product: {
-          select: { id: true, title: true, image: true, price: true, sellerId: true },
-        },
+        product: { select: { id: true, title: true, image: true, price: true, sellerId: true } },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -109,14 +96,7 @@ app.get("/api/chats", auth, async (req: any, res: any) => {
       if (!chatsMap.has(key)) {
         const otherUser = msg.senderId === userId ? msg.receiver : msg.sender;
         const isBuying = msg.product?.sellerId !== userId;
-        chatsMap.set(key, {
-          productId: msg.productId,
-          product: msg.product,
-          lastMessage: msg,
-          otherUser,
-          unread: 0,
-          isBuying,
-        });
+        chatsMap.set(key, { productId: msg.productId, product: msg.product, lastMessage: msg, otherUser, unread: 0, isBuying });
       }
       if (!msg.isRead && msg.receiverId === userId) {
         chatsMap.get(key).unread++;
@@ -124,10 +104,8 @@ app.get("/api/chats", auth, async (req: any, res: any) => {
     }
 
     const chats = Array.from(chatsMap.values());
-    console.log(`Chats for user ${userId}:`, chats.length);
     res.json({ success: true, data: chats });
   } catch (error) {
-    console.error("Chats error:", error);
     res.status(500).json({ success: false, message: "Помилка сервера" });
   }
 });
@@ -144,6 +122,98 @@ app.put("/api/messages/read/:productId", auth, async (req: any, res: any) => {
     res.json({ success: true });
   } catch {
     res.status(500).json({ success: false, message: "Помилка сервера" });
+  }
+});
+
+// Зберегти ціну товару в історію
+app.post("/api/price-history/:productId", async (req: any, res: any) => {
+  try {
+    const productId = Number(req.params.productId);
+    const product = await prisma.product.findUnique({ where: { id: productId } });
+    if (!product) return res.status(404).json({ success: false });
+    await prisma.priceHistory.create({ data: { productId, price: product.price } });
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ success: false });
+  }
+});
+
+// Отримати історію цін товару
+app.get("/api/price-history/:productId", async (req: any, res: any) => {
+  try {
+    const productId = Number(req.params.productId);
+    const history = await prisma.priceHistory.findMany({
+      where: { productId },
+      orderBy: { createdAt: "asc" },
+    });
+    res.json({ success: true, data: history });
+  } catch {
+    res.status(500).json({ success: false });
+  }
+});
+
+// Аналітика по товару
+app.get("/api/analytics/product/:productId", async (req: any, res: any) => {
+  try {
+    const productId = Number(req.params.productId);
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      include: {
+        priceHistory: { orderBy: { createdAt: "asc" } },
+        category: true,
+      },
+    });
+    if (!product) return res.status(404).json({ success: false });
+
+    const prices = product.priceHistory.map(h => h.price);
+    const allPrices = [...prices, product.price];
+
+    res.json({
+      success: true,
+      data: {
+        id: product.id,
+        title: product.title,
+        currentPrice: product.price,
+        minPrice: Math.min(...allPrices),
+        maxPrice: Math.max(...allPrices),
+        avgPrice: Math.round(allPrices.reduce((s, p) => s + p, 0) / allPrices.length),
+        history: product.priceHistory,
+        category: product.category,
+      },
+    });
+  } catch {
+    res.status(500).json({ success: false });
+  }
+});
+
+// Аналітика по категорії
+app.get("/api/analytics/category/:categoryId", async (req: any, res: any) => {
+  try {
+    const categoryId = Number(req.params.categoryId);
+    const products = await prisma.product.findMany({
+      where: categoryId ? { categoryId } : {},
+      include: {
+        priceHistory: { orderBy: { createdAt: "asc" } },
+        category: true,
+      },
+    });
+
+    const result = products.map(p => ({
+      id: p.id,
+      title: p.title,
+      currentPrice: p.price,
+      minPrice: p.priceHistory.length > 0 ? Math.min(...p.priceHistory.map(h => h.price)) : p.price,
+      maxPrice: p.priceHistory.length > 0 ? Math.max(...p.priceHistory.map(h => h.price)) : p.price,
+      avgPrice: p.priceHistory.length > 0
+        ? Math.round(p.priceHistory.reduce((s, h) => s + h.price, 0) / p.priceHistory.length)
+        : p.price,
+      history: p.priceHistory,
+      category: p.category,
+    }));
+
+    res.json({ success: true, data: result });
+  } catch {
+    res.status(500).json({ success: false });
   }
 });
 
