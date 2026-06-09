@@ -18,7 +18,9 @@ type AppContextType = {
   login: (token: string, user: User) => void;
   logout: () => void;
   favorites: number[];
+  clinicFavorites: number[];
   toggleFavorite: (id: number) => void;
+  toggleClinicFavorite: (id: number) => void;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
   selectedProduct: any;
@@ -40,6 +42,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<number[]>([]);
+  const [clinicFavorites, setClinicFavorites] = useState<number[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [selectedClinic, setSelectedClinic] = useState<any>(null);
@@ -52,9 +55,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setUser(JSON.parse(savedUser));
     }
     const savedFavorites = localStorage.getItem("favorites");
-    if (savedFavorites) {
-      setFavorites(JSON.parse(savedFavorites));
-    }
+    if (savedFavorites) setFavorites(JSON.parse(savedFavorites));
+
+    const savedClinicFavorites = localStorage.getItem("clinicFavorites");
+    if (savedClinicFavorites) setClinicFavorites(JSON.parse(savedClinicFavorites));
   }, []);
 
   function navigate(pg: string, data?: any) {
@@ -81,10 +85,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   function toggleFavorite(id: number) {
     setFavorites(prev => {
-      const newFavs = prev.includes(id)
-        ? prev.filter(f => f !== id)
-        : [...prev, id];
+      const newFavs = prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id];
       localStorage.setItem("favorites", JSON.stringify(newFavs));
+      return newFavs;
+    });
+  }
+
+  function toggleClinicFavorite(id: number) {
+    setClinicFavorites(prev => {
+      const newFavs = prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id];
+      localStorage.setItem("clinicFavorites", JSON.stringify(newFavs));
       return newFavs;
     });
   }
@@ -94,6 +104,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       page, navigate,
       user, token, login, logout,
       favorites, toggleFavorite,
+      clinicFavorites, toggleClinicFavorite,
       searchQuery, setSearchQuery,
       selectedProduct, setSelectedProduct,
       selectedClinic, setSelectedClinic,
