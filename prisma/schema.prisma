@@ -18,11 +18,13 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  products         Product[]
-  favorites        Favorite[]
-  reviews          Review[]
-  sentMessages     Message[] @relation("SentMessages")
-  receivedMessages Message[] @relation("ReceivedMessages")
+  products                Product[]
+  favorites               Favorite[]
+  reviews                 Review[]
+  sentMessages            Message[]        @relation("SentMessages")
+  receivedMessages        Message[]        @relation("ReceivedMessages")
+  sentServiceMessages     ServiceMessage[] @relation("SentServiceMessages")
+  receivedServiceMessages ServiceMessage[] @relation("ReceivedServiceMessages")
 }
 
 enum Role {
@@ -98,7 +100,9 @@ model Service {
   priceFrom   Float
   priceTo     Float
   duration    String
-  clinics     ClinicService[]
+
+  clinics         ClinicService[]
+  serviceMessages ServiceMessage[]
 }
 
 model ClinicService {
@@ -145,6 +149,20 @@ model Message {
   receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
   product    Product? @relation(fields: [productId], references: [id])
   clinic     Clinic?  @relation(fields: [clinicId], references: [id])
+}
+
+model ServiceMessage {
+  id         Int      @id @default(autoincrement())
+  text       String
+  createdAt  DateTime @default(now())
+  senderId   Int
+  receiverId Int
+  serviceId  Int
+  isRead     Boolean  @default(false)
+
+  sender     User     @relation("SentServiceMessages", fields: [senderId], references: [id])
+  receiver   User     @relation("ReceivedServiceMessages", fields: [receiverId], references: [id])
+  service    Service  @relation(fields: [serviceId], references: [id])
 }
 
 model PriceHistory {

@@ -19,8 +19,10 @@ type AppContextType = {
   logout: () => void;
   favorites: number[];
   clinicFavorites: number[];
+  serviceFavorites: number[];
   toggleFavorite: (id: number) => void;
   toggleClinicFavorite: (id: number) => void;
+  toggleServiceFavorite: (id: number) => void;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
   selectedProduct: any;
@@ -43,6 +45,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<number[]>([]);
   const [clinicFavorites, setClinicFavorites] = useState<number[]>([]);
+  const [serviceFavorites, setServiceFavorites] = useState<number[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [selectedClinic, setSelectedClinic] = useState<any>(null);
@@ -50,15 +53,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const savedToken = localStorage.getItem("token");
     const savedUser = localStorage.getItem("user");
-    if (savedToken && savedUser) {
-      setToken(savedToken);
-      setUser(JSON.parse(savedUser));
-    }
-    const savedFavorites = localStorage.getItem("favorites");
-    if (savedFavorites) setFavorites(JSON.parse(savedFavorites));
-
-    const savedClinicFavorites = localStorage.getItem("clinicFavorites");
-    if (savedClinicFavorites) setClinicFavorites(JSON.parse(savedClinicFavorites));
+    if (savedToken && savedUser) { setToken(savedToken); setUser(JSON.parse(savedUser)); }
+    const savedFav = localStorage.getItem("favorites");
+    if (savedFav) setFavorites(JSON.parse(savedFav));
+    const savedClinicFav = localStorage.getItem("clinicFavorites");
+    if (savedClinicFav) setClinicFavorites(JSON.parse(savedClinicFav));
+    const savedServiceFav = localStorage.getItem("serviceFavorites");
+    if (savedServiceFav) setServiceFavorites(JSON.parse(savedServiceFav));
   }, []);
 
   function navigate(pg: string, data?: any) {
@@ -69,15 +70,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   function login(newToken: string, newUser: User) {
-    setToken(newToken);
-    setUser(newUser);
+    setToken(newToken); setUser(newUser);
     localStorage.setItem("token", newToken);
     localStorage.setItem("user", JSON.stringify(newUser));
   }
 
   function logout() {
-    setToken(null);
-    setUser(null);
+    setToken(null); setUser(null);
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     setPage("home");
@@ -85,17 +84,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   function toggleFavorite(id: number) {
     setFavorites(prev => {
-      const newFavs = prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id];
-      localStorage.setItem("favorites", JSON.stringify(newFavs));
-      return newFavs;
+      const n = prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id];
+      localStorage.setItem("favorites", JSON.stringify(n));
+      return n;
     });
   }
 
   function toggleClinicFavorite(id: number) {
     setClinicFavorites(prev => {
-      const newFavs = prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id];
-      localStorage.setItem("clinicFavorites", JSON.stringify(newFavs));
-      return newFavs;
+      const n = prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id];
+      localStorage.setItem("clinicFavorites", JSON.stringify(n));
+      return n;
+    });
+  }
+
+  function toggleServiceFavorite(id: number) {
+    setServiceFavorites(prev => {
+      const n = prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id];
+      localStorage.setItem("serviceFavorites", JSON.stringify(n));
+      return n;
     });
   }
 
@@ -105,6 +112,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       user, token, login, logout,
       favorites, toggleFavorite,
       clinicFavorites, toggleClinicFavorite,
+      serviceFavorites, toggleServiceFavorite,
       searchQuery, setSearchQuery,
       selectedProduct, setSelectedProduct,
       selectedClinic, setSelectedClinic,

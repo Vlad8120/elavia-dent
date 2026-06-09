@@ -115,6 +115,45 @@ app.post("/api/clinic-messages", auth, async (req: any, res: any) => {
   }
 });
 
+// Messages послуг
+app.get("/api/service-messages/:serviceId", auth, async (req: any, res: any) => {
+  try {
+    const userId = req.userId;
+    const serviceId = Number(req.params.serviceId);
+    const messages = await prisma.serviceMessage.findMany({
+      where: { serviceId, OR: [{ senderId: userId }, { receiverId: userId }] },
+      include: {
+        sender: { select: { id: true, name: true } },
+        receiver: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    res.json({ success: true, data: messages });
+  } catch {
+    res.json({ success: true, data: [] });
+  }
+});
+
+app.post("/api/service-messages", auth, async (req: any, res: any) => {
+  try {
+    const senderId = req.userId;
+    const { text, receiverId, serviceId } = req.body;
+    if (!text || !receiverId || !serviceId) {
+      return res.status(400).json({ success: false, message: "Заповніть всі поля" });
+    }
+    const message = await prisma.serviceMessage.create({
+      data: { text, senderId, receiverId: Number(receiverId), serviceId: Number(serviceId) },
+      include: {
+        sender: { select: { id: true, name: true } },
+        receiver: { select: { id: true, name: true } },
+      },
+    });
+    res.status(201).json({ success: true, data: message });
+  } catch {
+    res.status(500).json({ success: false });
+  }
+});
+
 // Чати
 app.get("/api/chats", auth, async (req: any, res: any) => {
   try {
