@@ -17,6 +17,7 @@ export default function AnalyticsPage() {
   const [priceHistory, setPriceHistory] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [tracking, setTracking] = useState<number[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     Promise.all([fetchProducts(), fetchCategories()])
@@ -46,7 +47,6 @@ export default function AnalyticsPage() {
       : [...tracking, product.id];
     setTracking(newTracking);
     localStorage.setItem("tracking", JSON.stringify(newTracking));
-
     if (!tracking.includes(product.id)) {
       await fetch(`${API}/price-history/${product.id}`, { method: "POST" });
     }
@@ -61,6 +61,13 @@ export default function AnalyticsPage() {
     ? products
     : products.filter((p: any) => p.categoryId === Number(selectedCategory));
 
+  const searchedProducts = searchQuery
+    ? filteredProducts.filter((p: any) =>
+        p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.city.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : filteredProducts;
+
   const prices = filteredProducts.map((p: any) => p.price);
   const minPrice = prices.length ? Math.min(...prices) : 0;
   const maxPrice = prices.length ? Math.max(...prices) : 0;
@@ -74,10 +81,8 @@ export default function AnalyticsPage() {
   }).filter((c: any) => c.count > 0).sort((a: any, b: any) => b.avg - a.avg);
 
   const maxAvg = categoryStats.length ? Math.max(...categoryStats.map((c: any) => c.avg)) : 1;
-
   const trackedProducts = products.filter((p: any) => tracking.includes(p.id));
 
-  // Формуємо графік з реальних даних + поточна ціна
   function buildChartData(product: any, history: any[]) {
     const points = [...history.map(h => ({ date: new Date(h.createdAt), price: h.price }))];
     points.push({ date: new Date(), price: product.price });
@@ -100,15 +105,11 @@ export default function AnalyticsPage() {
         {/* Вкладки */}
         <div className="flex gap-2 mb-6">
           <button onClick={() => setSelectedProduct(null)}
-            className={`px-4 py-2 text-sm font-medium rounded-xl border transition-all ${
-              !selectedProduct ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:border-blue-300"
-            }`}>
+            className={`px-4 py-2 text-sm font-medium rounded-xl border transition-all ${!selectedProduct ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:border-blue-300"}`}>
             📊 Загальна аналітика
           </button>
           <button onClick={() => setSelectedProduct(selectedProduct || trackedProducts[0] || null)}
-            className={`px-4 py-2 text-sm font-medium rounded-xl border transition-all ${
-              selectedProduct ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:border-blue-300"
-            }`}>
+            className={`px-4 py-2 text-sm font-medium rounded-xl border transition-all ${selectedProduct ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:border-blue-300"}`}>
             📈 Відстеження цін
             {tracking.length > 0 && (
               <span className="ml-1.5 w-4 h-4 bg-white text-blue-600 text-xs rounded-full inline-flex items-center justify-center font-bold">
@@ -126,7 +127,6 @@ export default function AnalyticsPage() {
               ← Назад до аналітики
             </button>
 
-            {/* Картка товару */}
             <div className="bg-white rounded-2xl border border-gray-200 p-6">
               <div className="flex items-start justify-between mb-4">
                 <div>
@@ -139,7 +139,6 @@ export default function AnalyticsPage() {
                 </div>
               </div>
 
-              {/* Статистика */}
               <div className="grid grid-cols-3 gap-3 mb-6">
                 <div className="bg-green-50 rounded-xl p-3 text-center">
                   <div className="text-xs text-gray-500 mb-1">Мін. ціна</div>
@@ -155,7 +154,6 @@ export default function AnalyticsPage() {
                 </div>
               </div>
 
-              {/* Графік */}
               <div className="mb-4">
                 <h3 className="text-sm font-semibold text-gray-700 mb-3">📈 Динаміка ціни</h3>
                 {historyLoading ? (
@@ -204,15 +202,9 @@ export default function AnalyticsPage() {
                 )}
               </div>
 
-              {/* Кнопки */}
               <div className="flex gap-2">
-                <button
-                  onClick={() => trackProduct(selectedProduct)}
-                  className={`flex-1 py-2.5 text-sm font-semibold rounded-xl transition-colors ${
-                    tracking.includes(selectedProduct.id)
-                      ? "bg-green-100 text-green-700 hover:bg-green-200"
-                      : "bg-blue-600 text-white hover:bg-blue-700"
-                  }`}>
+                <button onClick={() => trackProduct(selectedProduct)}
+                  className={`flex-1 py-2.5 text-sm font-semibold rounded-xl transition-colors ${tracking.includes(selectedProduct.id) ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-blue-600 text-white hover:bg-blue-700"}`}>
                   {tracking.includes(selectedProduct.id) ? "✅ Відстежується" : "📌 Відстежувати ціну"}
                 </button>
                 <button
@@ -223,15 +215,13 @@ export default function AnalyticsPage() {
                   className="px-4 py-2.5 text-sm font-semibold border border-gray-200 rounded-xl hover:bg-gray-50">
                   📝 Записати ціну
                 </button>
-                <button
-                  onClick={() => navigate("product-detail", { product: selectedProduct })}
+                <button onClick={() => navigate("product-detail", { product: selectedProduct })}
                   className="px-4 py-2.5 text-sm font-semibold border border-blue-200 text-blue-600 rounded-xl hover:bg-blue-50">
                   Переглянути
                 </button>
               </div>
             </div>
 
-            {/* Схожі товари для порівняння */}
             {selectedProduct.categoryId && (
               <div className="bg-white rounded-2xl border border-gray-200 p-6">
                 <h3 className="font-bold text-gray-900 mb-3">Схожі товари в категорії</h3>
@@ -240,8 +230,7 @@ export default function AnalyticsPage() {
                     .filter((p: any) => p.categoryId === selectedProduct.categoryId && p.id !== selectedProduct.id)
                     .slice(0, 5)
                     .map((p: any) => (
-                      <div key={p.id}
-                        onClick={() => selectProduct(p)}
+                      <div key={p.id} onClick={() => selectProduct(p)}
                         className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-blue-200 cursor-pointer transition-all">
                         <span className="text-xl">{p.image?.startsWith("http") ? "📷" : p.image || "🦷"}</span>
                         <div className="flex-1 min-w-0">
@@ -280,7 +269,6 @@ export default function AnalyticsPage() {
               </div>
             ) : (
               <>
-                {/* Загальна статистика */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
                   {[
                     { label: "Товарів", value: filteredProducts.length },
@@ -295,37 +283,54 @@ export default function AnalyticsPage() {
                   ))}
                 </div>
 
-                {/* Товари з кнопкою відстеження */}
                 <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-4">
-                  <h2 className="font-bold text-gray-900 mb-4">
-                    Товари {selectedCategory !== "all" && `— ${categories.find((c: any) => c.id === Number(selectedCategory))?.name}`}
-                    <span className="text-sm font-normal text-gray-500 ml-2">Натисніть для відстеження</span>
-                  </h2>
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="font-bold text-gray-900">
+                      Товари {selectedCategory !== "all" && `— ${categories.find((c: any) => c.id === Number(selectedCategory))?.name}`}
+                    </h2>
+                    <span className="text-xs text-gray-400">Натисніть 📌 для відстеження</span>
+                  </div>
+
+                  {/* Пошук товару */}
+                  <input
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="🔍 Пошук товару за назвою або містом..."
+                    className="w-full px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white mb-3"
+                  />
+
+                  {searchQuery && (
+                    <div className="text-xs text-gray-400 mb-2">
+                      Знайдено: {searchedProducts.length} товарів
+                    </div>
+                  )}
+
                   <div className="space-y-2 max-h-80 overflow-y-auto">
-                    {filteredProducts.sort((a: any, b: any) => a.price - b.price).map((p: any) => (
-                      <div key={p.id}
-                        className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-blue-200 transition-all">
-                        <span className="text-xl flex-shrink-0">{p.image?.startsWith("http") ? "📷" : p.image || "🦷"}</span>
-                        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => selectProduct(p)}>
-                          <div className="text-sm font-medium text-gray-900 truncate">{p.title}</div>
-                          <div className="text-xs text-gray-400">📍 {p.city}</div>
+                    {searchedProducts.length > 0 ? (
+                      searchedProducts.sort((a: any, b: any) => a.price - b.price).map((p: any) => (
+                        <div key={p.id}
+                          className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-blue-200 transition-all">
+                          <span className="text-xl flex-shrink-0">{p.image?.startsWith("http") ? "📷" : p.image || "🦷"}</span>
+                          <div className="flex-1 min-w-0 cursor-pointer" onClick={() => selectProduct(p)}>
+                            <div className="text-sm font-medium text-gray-900 truncate">{p.title}</div>
+                            <div className="text-xs text-gray-400">📍 {p.city}</div>
+                          </div>
+                          <div className="text-sm font-bold text-blue-600 flex-shrink-0">{formatPrice(p.price)}</div>
+                          <button onClick={() => trackProduct(p)}
+                            className={`flex-shrink-0 px-2 py-1 text-xs rounded-lg border transition-all ${tracking.includes(p.id) ? "bg-green-100 text-green-700 border-green-200" : "text-gray-500 border-gray-200 hover:border-blue-300"}`}>
+                            {tracking.includes(p.id) ? "✅" : "📌"}
+                          </button>
                         </div>
-                        <div className="text-sm font-bold text-blue-600 flex-shrink-0">{formatPrice(p.price)}</div>
-                        <button
-                          onClick={() => trackProduct(p)}
-                          className={`flex-shrink-0 px-2 py-1 text-xs rounded-lg border transition-all ${
-                            tracking.includes(p.id)
-                              ? "bg-green-100 text-green-700 border-green-200"
-                              : "text-gray-500 border-gray-200 hover:border-blue-300"
-                          }`}>
-                          {tracking.includes(p.id) ? "✅" : "📌"}
-                        </button>
+                      ))
+                    ) : (
+                      <div className="text-center py-8 text-gray-400">
+                        <div className="text-3xl mb-2">🔍</div>
+                        <p className="text-sm">Нічого не знайдено</p>
                       </div>
-                    ))}
+                    )}
                   </div>
                 </div>
 
-                {/* Середня ціна за категорією */}
                 <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-4">
                   <h2 className="font-bold text-gray-900 mb-4">Середня ціна за категорією</h2>
                   <div className="space-y-3">
