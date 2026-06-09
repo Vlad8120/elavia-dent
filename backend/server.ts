@@ -76,7 +76,7 @@ app.post("/api/messages", auth, async (req: any, res: any) => {
   }
 });
 
-// Список чатів
+// Чати
 app.get("/api/chats", auth, async (req: any, res: any) => {
   try {
     const userId = req.userId;
@@ -103,14 +103,13 @@ app.get("/api/chats", auth, async (req: any, res: any) => {
       }
     }
 
-    const chats = Array.from(chatsMap.values());
-    res.json({ success: true, data: chats });
-  } catch (error) {
+    res.json({ success: true, data: Array.from(chatsMap.values()) });
+  } catch {
     res.status(500).json({ success: false, message: "Помилка сервера" });
   }
 });
 
-// Позначити як прочитане
+// Прочитати повідомлення
 app.put("/api/messages/read/:productId", auth, async (req: any, res: any) => {
   try {
     const userId = req.userId;
@@ -125,7 +124,76 @@ app.put("/api/messages/read/:productId", auth, async (req: any, res: any) => {
   }
 });
 
-// Зберегти ціну товару в історію
+// Оновити товар (адмін)
+app.put("/api/products/:id", auth, async (req: any, res: any) => {
+  try {
+    const id = Number(req.params.id);
+    const { title, price, city } = req.body;
+    const product = await prisma.product.update({
+      where: { id },
+      data: { title, price: Number(price), city },
+    });
+    res.json({ success: true, data: product });
+  } catch {
+    res.status(500).json({ success: false });
+  }
+});
+
+// Оновити клініку (адмін)
+app.put("/api/clinics/:id", auth, async (req: any, res: any) => {
+  try {
+    const id = Number(req.params.id);
+    const { name, city, address, phone } = req.body;
+    const clinic = await prisma.clinic.update({
+      where: { id },
+      data: { name, city, address, phone },
+    });
+    res.json({ success: true, data: clinic });
+  } catch {
+    res.status(500).json({ success: false });
+  }
+});
+
+// Видалити клініку (адмін)
+app.delete("/api/clinics/:id", auth, async (req: any, res: any) => {
+  try {
+    const id = Number(req.params.id);
+    await prisma.clinicService.deleteMany({ where: { clinicId: id } });
+    await prisma.review.deleteMany({ where: { clinicId: id } });
+    await prisma.favorite.deleteMany({ where: { clinicId: id } });
+    await prisma.clinic.delete({ where: { id } });
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ success: false });
+  }
+});
+
+// Список користувачів (адмін)
+app.get("/api/auth/users", auth, async (req: any, res: any) => {
+  try {
+    const users = await prisma.user.findMany({
+      select: { id: true, name: true, email: true, role: true, blocked: true, city: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+    });
+    res.json({ success: true, data: users });
+  } catch {
+    res.status(500).json({ success: false });
+  }
+});
+
+// Заблокувати/розблокувати користувача
+app.put("/api/auth/users/:id/block", auth, async (req: any, res: any) => {
+  try {
+    const id = Number(req.params.id);
+    const { blocked } = req.body;
+    await prisma.user.update({ where: { id }, data: { blocked } });
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ success: false });
+  }
+});
+
+// Історія цін
 app.post("/api/price-history/:productId", async (req: any, res: any) => {
   try {
     const productId = Number(req.params.productId);
@@ -138,7 +206,6 @@ app.post("/api/price-history/:productId", async (req: any, res: any) => {
   }
 });
 
-// Отримати історію цін товару
 app.get("/api/price-history/:productId", async (req: any, res: any) => {
   try {
     const productId = Number(req.params.productId);
@@ -152,33 +219,23 @@ app.get("/api/price-history/:productId", async (req: any, res: any) => {
   }
 });
 
-// Аналітика по товару
 app.get("/api/analytics/product/:productId", async (req: any, res: any) => {
   try {
     const productId = Number(req.params.productId);
     const product = await prisma.product.findUnique({
       where: { id: productId },
-      include: {
-        priceHistory: { orderBy: { createdAt: "asc" } },
-        category: true,
-      },
+      include: { priceHistory: { orderBy: { createdAt: "asc" } }, category: true },
     });
     if (!product) return res.status(404).json({ success: false });
-
     const prices = product.priceHistory.map(h => h.price);
     const allPrices = [...prices, product.price];
-
     res.json({
       success: true,
       data: {
-        id: product.id,
-        title: product.title,
-        currentPrice: product.price,
-        minPrice: Math.min(...allPrices),
-        maxPrice: Math.max(...allPrices),
+        id: product.id, title: product.title, currentPrice: product.price,
+        minPrice: Math.min(...allPrices), maxPrice: Math.max(...allPrices),
         avgPrice: Math.round(allPrices.reduce((s, p) => s + p, 0) / allPrices.length),
-        history: product.priceHistory,
-        category: product.category,
+        history: product.priceHistory, category: product.category,
       },
     });
   } catch {
@@ -186,31 +243,20 @@ app.get("/api/analytics/product/:productId", async (req: any, res: any) => {
   }
 });
 
-// Аналітика по категорії
 app.get("/api/analytics/category/:categoryId", async (req: any, res: any) => {
   try {
     const categoryId = Number(req.params.categoryId);
     const products = await prisma.product.findMany({
       where: categoryId ? { categoryId } : {},
-      include: {
-        priceHistory: { orderBy: { createdAt: "asc" } },
-        category: true,
-      },
+      include: { priceHistory: { orderBy: { createdAt: "asc" } }, category: true },
     });
-
     const result = products.map(p => ({
-      id: p.id,
-      title: p.title,
-      currentPrice: p.price,
+      id: p.id, title: p.title, currentPrice: p.price,
       minPrice: p.priceHistory.length > 0 ? Math.min(...p.priceHistory.map(h => h.price)) : p.price,
       maxPrice: p.priceHistory.length > 0 ? Math.max(...p.priceHistory.map(h => h.price)) : p.price,
-      avgPrice: p.priceHistory.length > 0
-        ? Math.round(p.priceHistory.reduce((s, h) => s + h.price, 0) / p.priceHistory.length)
-        : p.price,
-      history: p.priceHistory,
-      category: p.category,
+      avgPrice: p.priceHistory.length > 0 ? Math.round(p.priceHistory.reduce((s, h) => s + h.price, 0) / p.priceHistory.length) : p.price,
+      history: p.priceHistory, category: p.category,
     }));
-
     res.json({ success: true, data: result });
   } catch {
     res.status(500).json({ success: false });

@@ -15,6 +15,7 @@ model User {
   phone     String?
   city      String?
   role      Role     @default(BUYER)
+  blocked   Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -32,17 +33,14 @@ enum Role {
   ADMIN
 }
 
-// Категорії товарів
 model Category {
   id       Int       @id @default(autoincrement())
   name     String    @unique
   icon     String
   slug     String    @unique
-
   products Product[]
 }
 
-// Товари
 model Product {
   id          Int       @id @default(autoincrement())
   title       String
@@ -59,7 +57,6 @@ model Product {
 
   categoryId  Int
   category    Category  @relation(fields: [categoryId], references: [id])
-
   sellerId    Int
   seller      User      @relation(fields: [sellerId], references: [id])
 
@@ -73,7 +70,6 @@ enum Condition {
   USED
 }
 
-// Клініки
 model Clinic {
   id          Int      @id @default(autoincrement())
   name        String
@@ -95,7 +91,6 @@ model Clinic {
   favorites   Favorite[]
 }
 
-// Послуги
 model Service {
   id          Int     @id @default(autoincrement())
   name        String
@@ -103,48 +98,39 @@ model Service {
   priceFrom   Float
   priceTo     Float
   duration    String
-
   clinics     ClinicService[]
 }
 
-// Зв'язок клінік та послуг
 model ClinicService {
   id        Int     @id @default(autoincrement())
   clinicId  Int
   serviceId Int
-
   clinic    Clinic  @relation(fields: [clinicId], references: [id])
   service   Service @relation(fields: [serviceId], references: [id])
 }
 
-// Обране
 model Favorite {
   id        Int      @id @default(autoincrement())
   userId    Int
   productId Int?
   clinicId  Int?
   createdAt DateTime @default(now())
-
   user      User     @relation(fields: [userId], references: [id])
   product   Product? @relation(fields: [productId], references: [id])
   clinic    Clinic?  @relation(fields: [clinicId], references: [id])
 }
 
-// Відгуки
 model Review {
   id        Int      @id @default(autoincrement())
   text      String
   rating    Int
   createdAt DateTime @default(now())
-
   userId    Int
   clinicId  Int
-
   user      User     @relation(fields: [userId], references: [id])
   clinic    Clinic   @relation(fields: [clinicId], references: [id])
 }
 
-// Повідомлення
 model Message {
   id         Int      @id @default(autoincrement())
   text       String
@@ -153,18 +139,15 @@ model Message {
   receiverId Int
   productId  Int
   isRead     Boolean  @default(false)
-
   sender     User     @relation("SentMessages", fields: [senderId], references: [id])
   receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
   product    Product  @relation(fields: [productId], references: [id])
 }
 
-// Історія цін
 model PriceHistory {
   id        Int      @id @default(autoincrement())
   price     Float
   createdAt DateTime @default(now())
   productId Int
-
   product   Product  @relation(fields: [productId], references: [id])
 }
