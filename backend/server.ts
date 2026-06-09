@@ -115,7 +115,7 @@ app.post("/api/clinic-messages", auth, async (req: any, res: any) => {
   }
 });
 
-// Чати (товари + клініки)
+// Чати
 app.get("/api/chats", auth, async (req: any, res: any) => {
   try {
     const userId = req.userId;
@@ -137,24 +137,12 @@ app.get("/api/chats", auth, async (req: any, res: any) => {
         const otherUser = msg.senderId === userId ? msg.receiver : msg.sender;
         const isBuying = msg.product ? msg.product.sellerId !== userId : true;
         const isClinic = !!msg.clinicId;
-        chatsMap.set(key, {
-          key,
-          productId: msg.productId,
-          clinicId: msg.clinicId,
-          product: msg.product,
-          clinic: msg.clinic,
-          lastMessage: msg,
-          otherUser,
-          unread: 0,
-          isBuying,
-          isClinic,
-        });
+        chatsMap.set(key, { key, productId: msg.productId, clinicId: msg.clinicId, product: msg.product, clinic: msg.clinic, lastMessage: msg, otherUser, unread: 0, isBuying, isClinic });
       }
       if (!msg.isRead && msg.receiverId === userId) {
         chatsMap.get(key).unread++;
       }
     }
-
     res.json({ success: true, data: Array.from(chatsMap.values()) });
   } catch {
     res.status(500).json({ success: false, message: "Помилка сервера" });
@@ -173,6 +161,46 @@ app.put("/api/messages/read/:productId", auth, async (req: any, res: any) => {
     res.json({ success: true });
   } catch {
     res.status(500).json({ success: false, message: "Помилка сервера" });
+  }
+});
+
+// Створити клініку
+app.post("/api/clinics", auth, async (req: any, res: any) => {
+  try {
+    const { name, description, city, oblast, address, phone, email, image, founded, doctors } = req.body;
+    const clinic = await prisma.clinic.create({
+      data: {
+        name, description: description || "",
+        city, oblast: oblast || "",
+        address, phone,
+        email: email || "",
+        image: image || "🏥",
+        founded: founded ? Number(founded) : null,
+        doctors: Number(doctors) || 1,
+      },
+    });
+    res.status(201).json({ success: true, data: clinic });
+  } catch {
+    res.status(500).json({ success: false });
+  }
+});
+
+// Створити послугу
+app.post("/api/services", auth, async (req: any, res: any) => {
+  try {
+    const { name, description, priceFrom, priceTo, duration } = req.body;
+    const service = await prisma.service.create({
+      data: {
+        name,
+        description: description || "",
+        priceFrom: Number(priceFrom),
+        priceTo: Number(priceTo || priceFrom),
+        duration,
+      },
+    });
+    res.status(201).json({ success: true, data: service });
+  } catch {
+    res.status(500).json({ success: false });
   }
 });
 
