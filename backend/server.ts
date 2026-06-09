@@ -37,7 +37,7 @@ function auth(req: any, res: any, next: any) {
   }
 }
 
-// Messages
+// Messages товарів
 app.get("/api/messages/:productId", auth, async (req: any, res: any) => {
   try {
     const userId = req.userId;
@@ -76,7 +76,46 @@ app.post("/api/messages", auth, async (req: any, res: any) => {
   }
 });
 
-// Чати
+// Messages клінік
+app.get("/api/clinic-messages/:clinicId", auth, async (req: any, res: any) => {
+  try {
+    const userId = req.userId;
+    const clinicId = Number(req.params.clinicId);
+    const messages = await prisma.message.findMany({
+      where: { clinicId, OR: [{ senderId: userId }, { receiverId: userId }] },
+      include: {
+        sender: { select: { id: true, name: true } },
+        receiver: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    res.json({ success: true, data: messages });
+  } catch {
+    res.status(500).json({ success: false });
+  }
+});
+
+app.post("/api/clinic-messages", auth, async (req: any, res: any) => {
+  try {
+    const senderId = req.userId;
+    const { text, receiverId, clinicId } = req.body;
+    if (!text || !receiverId || !clinicId) {
+      return res.status(400).json({ success: false, message: "Заповніть всі поля" });
+    }
+    const message = await prisma.message.create({
+      data: { text, senderId, receiverId: Number(receiverId), clinicId: Number(clinicId) },
+      include: {
+        sender: { select: { id: true, name: true } },
+        receiver: { select: { id: true, name: true } },
+      },
+    });
+    res.status(201).json({ success: true, data: message });
+  } catch {
+    res.status(500).json({ success: false });
+  }
+});
+
+// Чати (товари + клініки)
 app.get("/api/chats", auth, async (req: any, res: any) => {
   try {
     const userId = req.userId;
@@ -86,17 +125,30 @@ app.get("/api/chats", auth, async (req: any, res: any) => {
         sender: { select: { id: true, name: true } },
         receiver: { select: { id: true, name: true } },
         product: { select: { id: true, title: true, image: true, price: true, sellerId: true } },
+        clinic: { select: { id: true, name: true, image: true, city: true } },
       },
       orderBy: { createdAt: "desc" },
     });
 
     const chatsMap = new Map();
     for (const msg of messages) {
-      const key = msg.productId;
+      const key = msg.clinicId ? `clinic_${msg.clinicId}` : `product_${msg.productId}`;
       if (!chatsMap.has(key)) {
         const otherUser = msg.senderId === userId ? msg.receiver : msg.sender;
-        const isBuying = msg.product?.sellerId !== userId;
-        chatsMap.set(key, { productId: msg.productId, product: msg.product, lastMessage: msg, otherUser, unread: 0, isBuying });
+        const isBuying = msg.product ? msg.product.sellerId !== userId : true;
+        const isClinic = !!msg.clinicId;
+        chatsMap.set(key, {
+          key,
+          productId: msg.productId,
+          clinicId: msg.clinicId,
+          product: msg.product,
+          clinic: msg.clinic,
+          lastMessage: msg,
+          otherUser,
+          unread: 0,
+          isBuying,
+          isClinic,
+        });
       }
       if (!msg.isRead && msg.receiverId === userId) {
         chatsMap.get(key).unread++;
@@ -124,7 +176,7 @@ app.put("/api/messages/read/:productId", auth, async (req: any, res: any) => {
   }
 });
 
-// Оновити товар (адмін)
+// Оновити товар
 app.put("/api/products/:id", auth, async (req: any, res: any) => {
   try {
     const id = Number(req.params.id);
@@ -139,7 +191,7 @@ app.put("/api/products/:id", auth, async (req: any, res: any) => {
   }
 });
 
-// Оновити клініку (адмін)
+// Оновити клініку
 app.put("/api/clinics/:id", auth, async (req: any, res: any) => {
   try {
     const id = Number(req.params.id);
@@ -154,13 +206,14 @@ app.put("/api/clinics/:id", auth, async (req: any, res: any) => {
   }
 });
 
-// Видалити клініку (адмін)
+// Видалити клініку
 app.delete("/api/clinics/:id", auth, async (req: any, res: any) => {
   try {
     const id = Number(req.params.id);
     await prisma.clinicService.deleteMany({ where: { clinicId: id } });
     await prisma.review.deleteMany({ where: { clinicId: id } });
     await prisma.favorite.deleteMany({ where: { clinicId: id } });
+    await prisma.message.deleteMany({ where: { clinicId: id } });
     await prisma.clinic.delete({ where: { id } });
     res.json({ success: true });
   } catch {
@@ -168,7 +221,7 @@ app.delete("/api/clinics/:id", auth, async (req: any, res: any) => {
   }
 });
 
-// Список користувачів (адмін)
+// Список користувачів
 app.get("/api/auth/users", auth, async (req: any, res: any) => {
   try {
     const users = await prisma.user.findMany({
@@ -181,7 +234,7 @@ app.get("/api/auth/users", auth, async (req: any, res: any) => {
   }
 });
 
-// Заблокувати/розблокувати користувача
+// Заблокувати/розблокувати
 app.put("/api/auth/users/:id/block", auth, async (req: any, res: any) => {
   try {
     const id = Number(req.params.id);

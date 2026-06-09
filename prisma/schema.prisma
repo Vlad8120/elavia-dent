@@ -6,7 +6,6 @@ datasource db {
   provider = "postgresql"
 }
 
-// Користувачі
 model User {
   id        Int      @id @default(autoincrement())
   name      String
@@ -89,6 +88,7 @@ model Clinic {
   services    ClinicService[]
   reviews     Review[]
   favorites   Favorite[]
+  messages    Message[]
 }
 
 model Service {
@@ -137,11 +137,14 @@ model Message {
   createdAt  DateTime @default(now())
   senderId   Int
   receiverId Int
-  productId  Int
+  productId  Int?
+  clinicId   Int?
   isRead     Boolean  @default(false)
+
   sender     User     @relation("SentMessages", fields: [senderId], references: [id])
   receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
-  product    Product  @relation(fields: [productId], references: [id])
+  product    Product? @relation(fields: [productId], references: [id])
+  clinic     Clinic?  @relation(fields: [clinicId], references: [id])
 }
 
 model PriceHistory {
