@@ -1,4 +1,3 @@
-
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -24,34 +23,23 @@ app.use(express.json());
 app.get("/api/search/autocomplete", async (req: any, res: any) => {
   try {
     const query = String(req.query.q || "").trim();
-
-    if (!query || query.length < 2) {
-      return res.json({ success: true, data: [] });
-    }
+    if (!query || query.length < 2) return res.json({ success: true, data: [] });
 
     const [products, clinics, services] = await Promise.all([
       prisma.product.findMany({
-        where: {
-          isActive: true,
-          title: { contains: query, mode: "insensitive" },
-        },
+        where: { isActive: true, title: { contains: query, mode: "insensitive" } },
         select: { id: true, title: true },
         orderBy: { views: "desc" },
         take: 5,
       }),
       prisma.clinic.findMany({
-        where: {
-          isActive: true,
-          name: { contains: query, mode: "insensitive" },
-        },
+        where: { isActive: true, name: { contains: query, mode: "insensitive" } },
         select: { id: true, name: true, city: true },
         orderBy: { rating: "desc" },
         take: 3,
       }),
       prisma.service.findMany({
-        where: {
-          name: { contains: query, mode: "insensitive" },
-        },
+        where: { name: { contains: query, mode: "insensitive" } },
         select: { id: true, name: true },
         take: 3,
       }),
@@ -65,7 +53,6 @@ app.get("/api/search/autocomplete", async (req: any, res: any) => {
 
     res.json({ success: true, data: suggestions });
   } catch (error) {
-    console.error("Autocomplete error:", error);
     res.status(500).json({ success: false, data: [] });
   }
 });
@@ -74,10 +61,7 @@ app.get("/api/search/autocomplete", async (req: any, res: any) => {
 app.get("/api/search", async (req: any, res: any) => {
   try {
     const query = String(req.query.q || "").trim();
-
-    if (!query) {
-      return res.json({ success: true, data: { products: [], clinics: [], services: [], total: 0 } });
-    }
+    if (!query) return res.json({ success: true, data: { products: [], clinics: [], services: [], total: 0 } });
 
     const [products, clinics, services] = await Promise.all([
       prisma.product.findMany({
@@ -89,10 +73,7 @@ app.get("/api/search", async (req: any, res: any) => {
             { oblast: { contains: query, mode: "insensitive" } },
           ],
         },
-        include: {
-          category: true,
-          seller: { select: { id: true, name: true, city: true } },
-        },
+        include: { category: true, seller: { select: { id: true, name: true, city: true } } },
         orderBy: { views: "desc" },
         take: 20,
       }),
@@ -121,15 +102,43 @@ app.get("/api/search", async (req: any, res: any) => {
 
     res.json({
       success: true,
-      data: {
-        products, clinics, services,
-        total: products.length + clinics.length + services.length,
-        query,
-      },
+      data: { products, clinics, services, total: products.length + clinics.length + services.length, query },
     });
   } catch (error) {
-    console.error("Search error:", error);
     res.status(500).json({ success: false, message: "Помилка пошуку" });
+  }
+});
+
+// ===== AI АСИСТЕНТ ПРОКСІ =====
+app.post("/api/ai-chat", async (req: any, res: any) => {
+  try {
+    const { messages, systemPrompt } = req.body;
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+
+    if (!apiKey) {
+      return res.status(500).json({ success: false, text: "API ключ не налаштовано" });
+    }
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 1000,
+        system: systemPrompt,
+        messages,
+      }),
+    });
+
+    const data = await response.json();
+    const text = data.content?.[0]?.text || "Вибачте, помилка відповіді";
+    res.json({ success: true, text });
+  } catch (error) {
+    res.status(500).json({ success: false, text: "Помилка сервера" });
   }
 });
 
@@ -292,9 +301,7 @@ app.get("/api/chats", auth, async (req: any, res: any) => {
         const isClinic = !!msg.clinicId;
         chatsMap.set(key, { key, productId: msg.productId, clinicId: msg.clinicId, product: msg.product, clinic: msg.clinic, lastMessage: msg, otherUser, unread: 0, isBuying, isClinic });
       }
-      if (!msg.isRead && msg.receiverId === userId) {
-        chatsMap.get(key).unread++;
-      }
+      if (!msg.isRead && msg.receiverId === userId) chatsMap.get(key).unread++;
     }
     res.json({ success: true, data: Array.from(chatsMap.values()) });
   } catch {
@@ -316,7 +323,6 @@ app.put("/api/messages/read/:productId", auth, async (req: any, res: any) => {
   }
 });
 
-// Клініки
 app.post("/api/clinics", auth, async (req: any, res: any) => {
   try {
     const { name, description, city, oblast, address, phone, email, image, founded, doctors } = req.body;
@@ -400,7 +406,6 @@ app.put("/api/auth/users/:id/block", auth, async (req: any, res: any) => {
   }
 });
 
-// Історія цін
 app.post("/api/price-history/:productId", async (req: any, res: any) => {
   try {
     const productId = Number(req.params.productId);

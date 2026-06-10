@@ -40,7 +40,6 @@ export default function ChatWidget() {
     setLoading(true);
 
     try {
-      // Завантажуємо реальні дані з БД
       const [productsRes, clinicsRes, servicesRes] = await Promise.all([
         fetch(`${API}/products`).then(r => r.json()).catch(() => ({ data: [] })),
         fetch(`${API}/clinics`).then(r => r.json()).catch(() => ({ data: [] })),
@@ -51,7 +50,6 @@ export default function ChatWidget() {
       const clinics = (clinicsRes.data || []).slice(0, 15);
       const services = (servicesRes.data || []).slice(0, 20);
 
-      // Формуємо контекст з реальних даних
       const productsContext = products.map((p: any) =>
         `- ${p.title} | Ціна: ${p.price} грн | Місто: ${p.city} | Категорія: ${p.category?.name || "—"} | Опис: ${p.description ? p.description.slice(0, 100) : "Інформацію не надано — зверніться до продавця"}`
       ).join("\n");
@@ -64,7 +62,6 @@ export default function ChatWidget() {
         `- ${s.name} | Ціна від: ${s.priceFrom} грн до ${s.priceTo} грн | Тривалість: ${s.duration} | Опис: ${s.description || "не вказано"}`
       ).join("\n");
 
-      // Аналіз цін
       const prices = products.map((p: any) => p.price).filter(Boolean);
       const minPrice = prices.length ? Math.min(...prices) : 0;
       const maxPrice = prices.length ? Math.max(...prices) : 0;
@@ -72,7 +69,7 @@ export default function ChatWidget() {
 
       const systemPrompt = `Ти — розумний AI асистент платформи Elavia Dent, українського маркетплейсу стоматологічних товарів та послуг.
 
-РЕАЛЬНІ ДАНІ З БАЗИ ДАНИХ (актуальні на сьогодні):
+РЕАЛЬНІ ДАНІ З БАЗИ ДАНИХ:
 
 === ТОВАРИ (${products.length} штук) ===
 ${productsContext}
@@ -84,52 +81,39 @@ ${clinicsContext}
 ${servicesContext}
 
 === АНАЛІЗ ЦІН ===
-Мінімальна ціна: ${minPrice} грн
-Максимальна ціна: ${maxPrice} грн
-Середня ціна: ${avgPrice} грн
+Мінімальна ціна: ${minPrice} грн | Максимальна: ${maxPrice} грн | Середня: ${avgPrice} грн
 
-ПРАВИЛА ВІДПОВІДЕЙ:
-1. Відповідай ТІЛЬКИ українською мовою
-2. Використовуй ТІЛЬКИ реальні дані з бази вище — не вигадуй
-3. Якщо опис товару порожній або "не надано" — обов'язково пиши: "По цьому товару детальна інформація не надана продавцем — рекомендую звернутись до продавця напряму через кнопку 'Написати' на сторінці товару"
-4. При питаннях про ціни — аналізуй реальні ціни з бази, порівнюй, давай рекомендації
-5. При питаннях про клініки — вказуй реальну адресу, телефон, рейтинг та послуги
-6. Якщо послуга не вказана в клініці — пиши що інформація відсутня
-7. Будь конкретним і корисним — давай точні назви, ціни, адреси
-8. Відповідай коротко але інформативно (3-6 речень)
-9. Якщо питання не стосується стоматології чи платформи — ввічливо поверни до теми`;
+ПРАВИЛА:
+1. Відповідай ТІЛЬКИ українською
+2. Використовуй ТІЛЬКИ реальні дані вище — не вигадуй
+3. Якщо опис товару порожній — пиши: "По цьому товару детальна інформація не надана продавцем — зверніться до продавця напряму через кнопку 'Написати'"
+4. При питаннях про ціни — аналізуй, порівнюй, давай рекомендації
+5. При питаннях про клініки — вказуй адресу, телефон, рейтинг, послуги
+6. Якщо послуга не вказана — пиши що інформація відсутня
+7. Відповідай коротко але конкретно (3-6 речень)`;
 
       const conversationHistory = messages
         .filter(m => m.id !== 1)
         .slice(-6)
-        .map(m => ({
-          role: m.role === "user" ? "user" : "assistant",
-          content: m.text,
-        }));
+        .map(m => ({ role: m.role === "user" ? "user" : "assistant", content: m.text }));
 
       conversationHistory.push({ role: "user", content: userText });
 
-      // Запит до Claude API
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch(`${API}/ai-chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          system: systemPrompt,
-          messages: conversationHistory,
-        }),
+        body: JSON.stringify({ messages: conversationHistory, systemPrompt }),
       });
 
       const data = await response.json();
-      const text = data.content?.[0]?.text || "Вибачте, сталася помилка. Спробуйте ще раз.";
+      const text = data.text || "Вибачте, сталася помилка. Спробуйте ще раз.";
 
       setMessages(prev => [...prev, { id: Date.now() + 1, role: "assistant", text }]);
-    } catch (error) {
+    } catch {
       setMessages(prev => [...prev, {
         id: Date.now() + 1,
         role: "assistant",
-        text: "Вибачте, сталася технічна помилка 😔 Спробуйте ще раз або зверніться до підтримки.",
+        text: "Вибачте, сталася технічна помилка 😔 Спробуйте ще раз.",
       }]);
     } finally {
       setLoading(false);
@@ -146,10 +130,8 @@ ${servicesContext}
 
   return (
     <>
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 transition-all hover:scale-110 z-50 flex items-center justify-center text-2xl"
-      >
+      <button onClick={() => setIsOpen(!isOpen)}
+        className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 transition-all hover:scale-110 z-50 flex items-center justify-center text-2xl">
         {isOpen ? "✕" : "🦷"}
       </button>
 
@@ -175,9 +157,7 @@ ${servicesContext}
                   <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-1 mr-2">🦷</div>
                 )}
                 <div className={`max-w-xs px-3 py-2 rounded-2xl text-sm leading-relaxed whitespace-pre-line ${
-                  msg.role === "user"
-                    ? "bg-blue-600 text-white rounded-br-none"
-                    : "bg-gray-100 text-gray-800 rounded-bl-none"
+                  msg.role === "user" ? "bg-blue-600 text-white rounded-br-none" : "bg-gray-100 text-gray-800 rounded-bl-none"
                 }`}>
                   {msg.text}
                 </div>
@@ -210,15 +190,11 @@ ${servicesContext}
           </div>
 
           <div className="p-3 border-t border-gray-100 flex gap-2 flex-shrink-0">
-            <input
-              ref={inputRef}
-              value={input}
-              onChange={e => setInput(e.target.value)}
+            <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === "Enter" && sendMessage()}
               placeholder="Запитайте про товари, клініки, ціни…"
               disabled={loading}
-              className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:opacity-50"
-            />
+              className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:opacity-50" />
             <button onClick={sendMessage} disabled={loading || !input.trim()}
               className="w-9 h-9 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center">
               {loading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : "➤"}
