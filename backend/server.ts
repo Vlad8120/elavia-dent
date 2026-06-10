@@ -37,7 +37,113 @@ function auth(req: any, res: any, next: any) {
   }
 }
 
-// Messages товарів
+// ===== ІНТЕЛЕКТУАЛЬНИЙ ПОШУК =====
+app.get("/api/search", async (req: any, res: any) => {
+  try {
+    const query = String(req.query.q || "").trim();
+    const type = String(req.query.type || "all");
+
+    if (!query) {
+      return res.json({ success: true, data: { products: [], clinics: [], services: [], total: 0 } });
+    }
+
+    // Формуємо пошуковий запит — кожне слово окремо з префіксом
+    const words = query.split(/\s+/).filter(Boolean);
+    const tsQuery = words.map(w => `${w}:*`).join(" & ");
+
+    let products: any[] = [];
+    let clinics: any[] = [];
+    let services: any[] = [];
+
+    if (type === "all" || type === "products") {
+      const result = await prisma.$queryRaw`
+        SELECT
+          p.*,
+          c.name as category_name,
+          c.icon as category_icon,
+          u.name as seller_name,
+          u.city as seller_city,
+          ts_rank(p.search_vector, to_tsquery('simple', ${tsQuery})) as rank
+        FROM "Product" p
+        LEFT JOIN "Category" c ON p."categoryId" = c.id
+        LEFT JOIN "User" u ON p."sellerId" = u.id
+        WHERE
+          p.search_vector @@ to_tsquery('simple', ${tsQuery})
+          OR p.title ILIKE ${'%' + query + '%'}
+          OR p.description ILIKE ${'%' + query + '%'}
+          OR p.city ILIKE ${'%' + query + '%'}
+        ORDER BY rank DESC, p.views DESC
+        LIMIT 20
+      `;
+      products = (result as any[]).map(p => ({
+        id: p.id, title: p.title, description: p.description,
+        price: p.price, city: p.city, oblast: p.oblast,
+        condition: p.condition, image: p.image, views: p.views,
+        categoryId: p.categoryId, sellerId: p.sellerId,
+        category: { name: p.category_name, icon: p.category_icon },
+        seller: { name: p.seller_name, city: p.seller_city },
+        rank: Number(p.rank),
+      }));
+    }
+
+    if (type === "all" || type === "clinics") {
+      const result = await prisma.$queryRaw`
+        SELECT
+          c.*,
+          ts_rank(c.search_vector, to_tsquery('simple', ${tsQuery})) as rank
+        FROM "Clinic" c
+        WHERE
+          c.search_vector @@ to_tsquery('simple', ${tsQuery})
+          OR c.name ILIKE ${'%' + query + '%'}
+          OR c.description ILIKE ${'%' + query + '%'}
+          OR c.city ILIKE ${'%' + query + '%'}
+        ORDER BY rank DESC, c.rating DESC
+        LIMIT 10
+      `;
+      clinics = (result as any[]).map(c => ({
+        id: c.id, name: c.name, description: c.description,
+        city: c.city, address: c.address, phone: c.phone,
+        email: c.email, image: c.image, rating: c.rating,
+        doctors: c.doctors, founded: c.founded,
+        rank: Number(c.rank),
+      }));
+    }
+
+    if (type === "all" || type === "services") {
+      const result = await prisma.$queryRaw`
+        SELECT
+          s.*,
+          ts_rank(s.search_vector, to_tsquery('simple', ${tsQuery})) as rank
+        FROM "Service" s
+        WHERE
+          s.search_vector @@ to_tsquery('simple', ${tsQuery})
+          OR s.name ILIKE ${'%' + query + '%'}
+          OR s.description ILIKE ${'%' + query + '%'}
+        ORDER BY rank DESC
+        LIMIT 10
+      `;
+      services = (result as any[]).map(s => ({
+        id: s.id, name: s.name, description: s.description,
+        priceFrom: s.priceFrom, priceTo: s.priceTo, duration: s.duration,
+        rank: Number(s.rank),
+      }));
+    }
+
+    res.json({
+      success: true,
+      data: {
+        products, clinics, services,
+        total: products.length + clinics.length + services.length,
+        query,
+      },
+    });
+  } catch (error) {
+    console.error("Search error:", error);
+    res.status(500).json({ success: false, message: "Помилка пошуку" });
+  }
+});
+
+// ===== MESSAGES ТОВАРІВ =====
 app.get("/api/messages/:productId", auth, async (req: any, res: any) => {
   try {
     const userId = req.userId;
@@ -76,7 +182,7 @@ app.post("/api/messages", auth, async (req: any, res: any) => {
   }
 });
 
-// Messages клінік
+// ===== MESSAGES КЛІНІК =====
 app.get("/api/clinic-messages/:clinicId", auth, async (req: any, res: any) => {
   try {
     const userId = req.userId;
@@ -115,7 +221,7 @@ app.post("/api/clinic-messages", auth, async (req: any, res: any) => {
   }
 });
 
-// Messages послуг
+// ===== MESSAGES ПОСЛУГ =====
 app.get("/api/service-messages/:serviceId", auth, async (req: any, res: any) => {
   try {
     const userId = req.userId;
@@ -154,7 +260,7 @@ app.post("/api/service-messages", auth, async (req: any, res: any) => {
   }
 });
 
-// Чати
+// ===== ЧАТИ =====
 app.get("/api/chats", auth, async (req: any, res: any) => {
   try {
     const userId = req.userId;
@@ -188,7 +294,6 @@ app.get("/api/chats", auth, async (req: any, res: any) => {
   }
 });
 
-// Прочитати повідомлення
 app.put("/api/messages/read/:productId", auth, async (req: any, res: any) => {
   try {
     const userId = req.userId;
@@ -203,20 +308,12 @@ app.put("/api/messages/read/:productId", auth, async (req: any, res: any) => {
   }
 });
 
-// Створити клініку
+// ===== КЛІНІКИ =====
 app.post("/api/clinics", auth, async (req: any, res: any) => {
   try {
     const { name, description, city, oblast, address, phone, email, image, founded, doctors } = req.body;
     const clinic = await prisma.clinic.create({
-      data: {
-        name, description: description || "",
-        city, oblast: oblast || "",
-        address, phone,
-        email: email || "",
-        image: image || "🏥",
-        founded: founded ? Number(founded) : null,
-        doctors: Number(doctors) || 1,
-      },
+      data: { name, description: description || "", city, oblast: oblast || "", address, phone, email: email || "", image: image || "🏥", founded: founded ? Number(founded) : null, doctors: Number(doctors) || 1 },
     });
     res.status(201).json({ success: true, data: clinic });
   } catch {
@@ -224,18 +321,11 @@ app.post("/api/clinics", auth, async (req: any, res: any) => {
   }
 });
 
-// Створити послугу
 app.post("/api/services", auth, async (req: any, res: any) => {
   try {
     const { name, description, priceFrom, priceTo, duration } = req.body;
     const service = await prisma.service.create({
-      data: {
-        name,
-        description: description || "",
-        priceFrom: Number(priceFrom),
-        priceTo: Number(priceTo || priceFrom),
-        duration,
-      },
+      data: { name, description: description || "", priceFrom: Number(priceFrom), priceTo: Number(priceTo || priceFrom), duration },
     });
     res.status(201).json({ success: true, data: service });
   } catch {
@@ -243,37 +333,28 @@ app.post("/api/services", auth, async (req: any, res: any) => {
   }
 });
 
-// Оновити товар
 app.put("/api/products/:id", auth, async (req: any, res: any) => {
   try {
     const id = Number(req.params.id);
     const { title, price, city } = req.body;
-    const product = await prisma.product.update({
-      where: { id },
-      data: { title, price: Number(price), city },
-    });
+    const product = await prisma.product.update({ where: { id }, data: { title, price: Number(price), city } });
     res.json({ success: true, data: product });
   } catch {
     res.status(500).json({ success: false });
   }
 });
 
-// Оновити клініку
 app.put("/api/clinics/:id", auth, async (req: any, res: any) => {
   try {
     const id = Number(req.params.id);
     const { name, city, address, phone } = req.body;
-    const clinic = await prisma.clinic.update({
-      where: { id },
-      data: { name, city, address, phone },
-    });
+    const clinic = await prisma.clinic.update({ where: { id }, data: { name, city, address, phone } });
     res.json({ success: true, data: clinic });
   } catch {
     res.status(500).json({ success: false });
   }
 });
 
-// Видалити клініку
 app.delete("/api/clinics/:id", auth, async (req: any, res: any) => {
   try {
     const id = Number(req.params.id);
@@ -288,7 +369,6 @@ app.delete("/api/clinics/:id", auth, async (req: any, res: any) => {
   }
 });
 
-// Список користувачів
 app.get("/api/auth/users", auth, async (req: any, res: any) => {
   try {
     const users = await prisma.user.findMany({
@@ -301,7 +381,6 @@ app.get("/api/auth/users", auth, async (req: any, res: any) => {
   }
 });
 
-// Заблокувати/розблокувати
 app.put("/api/auth/users/:id/block", auth, async (req: any, res: any) => {
   try {
     const id = Number(req.params.id);
@@ -313,7 +392,7 @@ app.put("/api/auth/users/:id/block", auth, async (req: any, res: any) => {
   }
 });
 
-// Історія цін
+// ===== ІСТОРІЯ ЦІН =====
 app.post("/api/price-history/:productId", async (req: any, res: any) => {
   try {
     const productId = Number(req.params.productId);
