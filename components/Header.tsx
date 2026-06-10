@@ -1,15 +1,46 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useApp } from "@/app/lib/context";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+
+type Suggestion = {
+  type: "product" | "clinic" | "service";
+  id: number;
+  label: string;
+  sub?: string;
+};
+
+const TYPE_ICON: Record<string, string> = {
+  product: "📦",
+  clinic: "🏥",
+  service: "🦷",
+};
+
+const TYPE_LABEL: Record<string, string> = {
+  product: "Товар",
+  clinic: "Клініка",
+  service: "Послуга",
+};
+
+const PAGE_MAP: Record<string, string> = {
+  product: "marketplace",
+  clinic: "clinics",
+  service: "services",
+};
 
 export default function Header() {
   const { navigate, user, logout, favorites, searchQuery, setSearchQuery, token } = useApp();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const [isLoading, setIsLoading] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!user || !token) return;
@@ -31,6 +62,74 @@ export default function Header() {
     } catch {}
   }
 
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+        setActiveIndex(-1);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  function handleSearchChange(value: string) {
+    setSearchQuery(value);
+    setActiveIndex(-1);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (value.trim().length < 2) {
+      setSuggestions([]);
+      setShowDropdown(false);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      setIsLoading(true);
+      try {
+        const res = await fetch(`${API}/search/autocomplete?q=${encodeURIComponent(value.trim())}`);
+        const data = await res.json();
+        if (data.success) {
+          setSuggestions(data.data || []);
+          setShowDropdown((data.data || []).length > 0);
+        }
+      } catch {
+        setSuggestions([]);
+        setShowDropdown(false);
+      } finally {
+        setIsLoading(false);
+      }
+    }, 250);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      if (activeIndex >= 0 && suggestions[activeIndex]) {
+        selectSuggestion(suggestions[activeIndex]);
+      } else {
+        setShowDropdown(false);
+        navigate("search");
+      }
+      return;
+    }
+    if (!showDropdown || suggestions.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIndex(i => Math.min(i + 1, suggestions.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex(i => Math.max(i - 1, -1));
+    } else if (e.key === "Escape") {
+      setShowDropdown(false);
+      setActiveIndex(-1);
+    }
+  }
+
+  function selectSuggestion(s: Suggestion) {
+    setSearchQuery(s.label);
+    setShowDropdown(false);
+    setActiveIndex(-1);
+    navigate(PAGE_MAP[s.type] || "search");
+  }
+
   const navLinks = [
     { label: "Товари", page: "marketplace" },
     { label: "Клініки", page: "clinics" },
@@ -43,7 +142,6 @@ export default function Header() {
     <header className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
 
-        {/* Логотип */}
         <button onClick={() => navigate("home")} className="flex items-center gap-2 flex-shrink-0">
           <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
             <span className="text-white font-bold text-lg">E</span>
@@ -51,18 +149,58 @@ export default function Header() {
           <span className="text-xl font-bold text-gray-900 hidden sm:block">Elavia Dent</span>
         </button>
 
-        {/* Пошук */}
-        <div className="hidden md:flex flex-1 max-w-md">
-          <input
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && navigate("search")}
-            placeholder="Пошук товарів, клінік, послуг…"
-            className="w-full px-4 py-2 text-sm text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-          />
+        {/* Пошук desktop */}
+        <div className="hidden md:flex flex-1 max-w-md" ref={wrapperRef}>
+          <div className="relative w-full">
+            <div className="relative flex items-center">
+              <span className="absolute left-3 text-gray-400 text-sm pointer-events-none">🔍</span>
+              <input
+                value={searchQuery}
+                onChange={e => handleSearchChange(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onFocus={() => suggestions.length > 0 && setShowDropdown(true)}
+                placeholder="Пошук товарів, клінік, послуг…"
+                className="w-full pl-9 pr-4 py-2 text-sm text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                autoComplete="off"
+              />
+              {isLoading && (
+                <span className="absolute right-3 text-gray-300 text-xs animate-pulse">●</span>
+              )}
+            </div>
+
+            {showDropdown && suggestions.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
+                {suggestions.map((s, i) => (
+                  <button
+                    key={`${s.type}-${s.id}`}
+                    onMouseDown={() => selectSuggestion(s)}
+                    onMouseEnter={() => setActiveIndex(i)}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                      i === activeIndex ? "bg-blue-50" : "hover:bg-gray-50"
+                    } ${i !== 0 ? "border-t border-gray-100" : ""}`}
+                  >
+                    <span className="text-base flex-shrink-0">{TYPE_ICON[s.type]}</span>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm text-gray-900 font-medium truncate block">{s.label}</span>
+                      {s.sub && <span className="text-xs text-gray-400">{s.sub}</span>}
+                    </div>
+                    <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full flex-shrink-0">
+                      {TYPE_LABEL[s.type]}
+                    </span>
+                  </button>
+                ))}
+                <button
+                  onMouseDown={() => { setShowDropdown(false); navigate("search"); }}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-blue-600 hover:bg-blue-50 border-t border-gray-100 font-medium"
+                >
+                  <span>🔍</span>
+                  <span>Всі результати для «{searchQuery}»</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Навігація */}
         <nav className="hidden lg:flex items-center gap-1">
           {navLinks.map(l => (
             <button key={l.page} onClick={() => navigate(l.page)}
@@ -72,7 +210,6 @@ export default function Header() {
           ))}
         </nav>
 
-        {/* Кнопки праворуч */}
         <div className="flex items-center gap-2 flex-shrink-0">
           {user ? (
             <>
@@ -80,10 +217,7 @@ export default function Header() {
                 className="hidden sm:flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50">
                 + Додати
               </button>
-
-              {/* Іконка повідомлень */}
-              <button
-                onClick={() => navigate("messages")}
+              <button onClick={() => navigate("messages")}
                 className="relative w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-100">
                 <span className="text-lg">💬</span>
                 {unreadCount > 0 && (
@@ -92,8 +226,6 @@ export default function Header() {
                   </span>
                 )}
               </button>
-
-              {/* Обране */}
               <button onClick={() => navigate("favorites")}
                 className="relative w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-100">
                 <span className="text-lg">♡</span>
@@ -103,8 +235,6 @@ export default function Header() {
                   </span>
                 )}
               </button>
-
-              {/* Меню користувача */}
               <div className="relative">
                 <button onClick={() => setUserMenuOpen(!userMenuOpen)}
                   className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-100">
@@ -160,12 +290,11 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Мобільне меню */}
       {mobileOpen && (
         <div className="lg:hidden border-t border-gray-100 bg-white px-4 py-3">
           <input
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
+            onChange={e => handleSearchChange(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") { navigate("search"); setMobileOpen(false); }}}
             placeholder="Пошук…"
             className="w-full px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-lg mb-3 focus:outline-none bg-white"
