@@ -19,102 +19,54 @@ const JWT_SECRET = process.env.JWT_SECRET || "elavia_dent_secret_key_2025";
 app.use(cors());
 app.use(express.json());
 
-// ===== ІНТЕЛЕКТУАЛЬНИЙ ПОШУК (ПЕРШИЙ!) =====
+// ===== ІНТЕЛЕКТУАЛЬНИЙ ПОШУК =====
 app.get("/api/search", async (req: any, res: any) => {
   try {
     const query = String(req.query.q || "").trim();
-    const type = String(req.query.type || "all");
 
     if (!query) {
       return res.json({ success: true, data: { products: [], clinics: [], services: [], total: 0 } });
     }
 
-    const words = query.split(/\s+/).filter(Boolean);
-    const tsQuery = words.map(w => `${w}:*`).join(" & ");
-
-    let products: any[] = [];
-    let clinics: any[] = [];
-    let services: any[] = [];
-
-    if (type === "all" || type === "products") {
-      try {
-        const result = await prisma.$queryRaw`
-          SELECT
-            p.*,
-            c.name as category_name,
-            c.icon as category_icon,
-            u.name as seller_name,
-            u.city as seller_city,
-            ts_rank(p.search_vector, to_tsquery('simple', ${tsQuery})) as rank
-          FROM "Product" p
-          LEFT JOIN "Category" c ON p."categoryId" = c.id
-          LEFT JOIN "User" u ON p."sellerId" = u.id
-          WHERE
-            p.search_vector @@ to_tsquery('simple', ${tsQuery})
-            OR p.title ILIKE ${'%' + query + '%'}
-            OR p.description ILIKE ${'%' + query + '%'}
-            OR p.city ILIKE ${'%' + query + '%'}
-          ORDER BY rank DESC, p.views DESC
-          LIMIT 20
-        `;
-        products = (result as any[]).map(p => ({
-          id: p.id, title: p.title, description: p.description,
-          price: p.price, city: p.city, oblast: p.oblast,
-          condition: p.condition, image: p.image, views: p.views,
-          categoryId: p.categoryId, sellerId: p.sellerId,
-          category: { name: p.category_name, icon: p.category_icon },
-          seller: { name: p.seller_name, city: p.seller_city },
-          rank: Number(p.rank),
-        }));
-      } catch { products = []; }
-    }
-
-    if (type === "all" || type === "clinics") {
-      try {
-        const result = await prisma.$queryRaw`
-          SELECT
-            c.*,
-            ts_rank(c.search_vector, to_tsquery('simple', ${tsQuery})) as rank
-          FROM "Clinic" c
-          WHERE
-            c.search_vector @@ to_tsquery('simple', ${tsQuery})
-            OR c.name ILIKE ${'%' + query + '%'}
-            OR c.description ILIKE ${'%' + query + '%'}
-            OR c.city ILIKE ${'%' + query + '%'}
-          ORDER BY rank DESC, c.rating DESC
-          LIMIT 10
-        `;
-        clinics = (result as any[]).map(c => ({
-          id: c.id, name: c.name, description: c.description,
-          city: c.city, address: c.address, phone: c.phone,
-          email: c.email, image: c.image, rating: Number(c.rating),
-          doctors: c.doctors, founded: c.founded,
-          rank: Number(c.rank),
-        }));
-      } catch { clinics = []; }
-    }
-
-    if (type === "all" || type === "services") {
-      try {
-        const result = await prisma.$queryRaw`
-          SELECT
-            s.*,
-            ts_rank(s.search_vector, to_tsquery('simple', ${tsQuery})) as rank
-          FROM "Service" s
-          WHERE
-            s.search_vector @@ to_tsquery('simple', ${tsQuery})
-            OR s.name ILIKE ${'%' + query + '%'}
-            OR s.description ILIKE ${'%' + query + '%'}
-          ORDER BY rank DESC
-          LIMIT 10
-        `;
-        services = (result as any[]).map(s => ({
-          id: s.id, name: s.name, description: s.description,
-          priceFrom: Number(s.priceFrom), priceTo: Number(s.priceTo),
-          duration: s.duration, rank: Number(s.rank),
-        }));
-      } catch { services = []; }
-    }
+    const [products, clinics, services] = await Promise.all([
+      prisma.product.findMany({
+        where: {
+          OR: [
+            { title: { contains: query, mode: "insensitive" } },
+            { description: { contains: query, mode: "insensitive" } },
+            { city: { contains: query, mode: "insensitive" } },
+            { oblast: { contains: query, mode: "insensitive" } },
+          ],
+        },
+        include: {
+          category: true,
+          seller: { select: { id: true, name: true, city: true } },
+        },
+        orderBy: { views: "desc" },
+        take: 20,
+      }),
+      prisma.clinic.findMany({
+        where: {
+          OR: [
+            { name: { contains: query, mode: "insensitive" } },
+            { description: { contains: query, mode: "insensitive" } },
+            { city: { contains: query, mode: "insensitive" } },
+            { address: { contains: query, mode: "insensitive" } },
+          ],
+        },
+        orderBy: { rating: "desc" },
+        take: 10,
+      }),
+      prisma.service.findMany({
+        where: {
+          OR: [
+            { name: { contains: query, mode: "insensitive" } },
+            { description: { contains: query, mode: "insensitive" } },
+          ],
+        },
+        take: 10,
+      }),
+    ]);
 
     res.json({
       success: true,
