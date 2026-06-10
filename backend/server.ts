@@ -19,7 +19,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "elavia_dent_secret_key_2025";
 app.use(cors());
 app.use(express.json());
 
-// ===== AUTOCOMPLETE =====
+//  AUTOCOMPLETE 
 app.get("/api/search/autocomplete", async (req: any, res: any) => {
   try {
     const query = String(req.query.q || "").trim();
@@ -57,7 +57,7 @@ app.get("/api/search/autocomplete", async (req: any, res: any) => {
   }
 });
 
-// ===== ІНТЕЛЕКТУАЛЬНИЙ ПОШУК =====
+//  ІНТЕЛЕКТУАЛЬНИЙ ПОШУК 
 app.get("/api/search", async (req: any, res: any) => {
   try {
     const query = String(req.query.q || "").trim();
@@ -109,38 +109,70 @@ app.get("/api/search", async (req: any, res: any) => {
   }
 });
 
-// ===== AI АСИСТЕНТ ПРОКСІ =====
+//  AI АСИСТЕНТ ПРОКСІ через Gemini 
 app.post("/api/ai-chat", async (req: any, res: any) => {
   try {
-    const { messages, systemPrompt } = req.body;
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const { messages = [], systemPrompt = "" } = req.body;
+    const apiKey = process.env.GEMINI_API_KEY || "";
+
+    console.log(
+      "GEMINI KEY exists:",
+      !!process.env.GEMINI_API_KEY,
+      "length:",
+      (process.env.GEMINI_API_KEY || "").length
+    );
 
     if (!apiKey) {
-      return res.status(500).json({ success: false, text: "API ключ не налаштовано" });
+      return res.status(500).json({
+        success: false,
+        text: "GEMINI_API_KEY не налаштовано на сервері",
+      });
     }
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 1000,
-        system: systemPrompt,
-        messages,
-      }),
-    });
+    const contents = messages
+      .filter((m: any) => m?.role !== "system" && m?.content)
+      .map((m: any) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: String(m.content) }],
+      }));
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          system_instruction: {
+            parts: [{ text: String(systemPrompt || "") }],
+          },
+          contents,
+        }),
+      }
+    );
 
     const data = await response.json();
-    const text = data.content?.[0]?.text || "Вибачте, помилка відповіді";
+
+    if (!response.ok) {
+      console.error("Gemini API error:", data);
+      return res.status(response.status).json({
+        success: false,
+        text: data.error?.message || "Помилка Gemini API",
+      });
+    }
+
+    const text =
+      data.candidates?.[0]?.content?.parts
+        ?.map((part: any) => part.text || "")
+        .join("")
+        .trim() || "Помилка відповіді";
+
     res.json({ success: true, text });
   } catch (error) {
+    console.error("AI chat error:", error);
     res.status(500).json({ success: false, text: "Помилка сервера" });
   }
 });
+
 
 app.use("/api/products", productsRouter);
 app.use("/api/clinics", clinicsRouter);
