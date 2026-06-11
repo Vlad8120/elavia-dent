@@ -144,7 +144,7 @@ app.post("/api/ai-chat", async (req: any, res: any) => {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-3-5-haiku-latest",
+        model: "claude-3-5-haiku-20241022",
         max_tokens: 1000,
         system: String(systemPrompt || ""),
         messages: cleanMessages,
