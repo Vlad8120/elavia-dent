@@ -24,14 +24,8 @@ const TYPE_LABEL: Record<string, string> = {
   service: "Послуга",
 };
 
-const PAGE_MAP: Record<string, string> = {
-  product: "marketplace",
-  clinic: "clinics",
-  service: "services",
-};
-
 export default function Header() {
-  const { navigate, user, logout, favorites, searchQuery, setSearchQuery, token } = useApp();
+  const { navigate, user, logout, favorites, searchQuery, setSearchQuery, token, setSelectedProduct, setSelectedClinic } = useApp();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -51,9 +45,7 @@ export default function Header() {
 
   async function loadUnread() {
     try {
-      const res = await fetch(`${API}/chats`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(`${API}/chats`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (data.success) {
         const total = (data.data || []).reduce((sum: number, c: any) => sum + c.unread, 0);
@@ -77,11 +69,7 @@ export default function Header() {
     setSearchQuery(value);
     setActiveIndex(-1);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (value.trim().length < 2) {
-      setSuggestions([]);
-      setShowDropdown(false);
-      return;
-    }
+    if (value.trim().length < 2) { setSuggestions([]); setShowDropdown(false); return; }
     debounceRef.current = setTimeout(async () => {
       setIsLoading(true);
       try {
@@ -92,11 +80,8 @@ export default function Header() {
           setShowDropdown((data.data || []).length > 0);
         }
       } catch {
-        setSuggestions([]);
-        setShowDropdown(false);
-      } finally {
-        setIsLoading(false);
-      }
+        setSuggestions([]); setShowDropdown(false);
+      } finally { setIsLoading(false); }
     }, 250);
   }
 
@@ -111,23 +96,38 @@ export default function Header() {
       return;
     }
     if (!showDropdown || suggestions.length === 0) return;
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setActiveIndex(i => Math.min(i + 1, suggestions.length - 1));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setActiveIndex(i => Math.max(i - 1, -1));
-    } else if (e.key === "Escape") {
-      setShowDropdown(false);
-      setActiveIndex(-1);
-    }
+    if (e.key === "ArrowDown") { e.preventDefault(); setActiveIndex(i => Math.min(i + 1, suggestions.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setActiveIndex(i => Math.max(i - 1, -1)); }
+    else if (e.key === "Escape") { setShowDropdown(false); setActiveIndex(-1); }
   }
 
-  function selectSuggestion(s: Suggestion) {
+  async function selectSuggestion(s: Suggestion) {
     setSearchQuery(s.label);
     setShowDropdown(false);
     setActiveIndex(-1);
-    navigate(PAGE_MAP[s.type] || "search");
+
+    try {
+      if (s.type === "product") {
+        const res = await fetch(`${API}/products/${s.id}`);
+        const data = await res.json();
+        if (data.success && data.data) {
+          setSelectedProduct(data.data);
+          navigate("product-detail");
+          return;
+        }
+      } else if (s.type === "clinic") {
+        const res = await fetch(`${API}/clinics/${s.id}`);
+        const data = await res.json();
+        if (data.success && data.data) {
+          setSelectedClinic(data.data);
+          navigate("clinic-detail");
+          return;
+        }
+      }
+    } catch {}
+
+    // fallback
+    navigate(s.type === "product" ? "marketplace" : s.type === "clinic" ? "clinics" : "services");
   }
 
   const navLinks = [
@@ -149,7 +149,6 @@ export default function Header() {
           <span className="text-xl font-bold text-gray-900 hidden sm:block">Elavia Dent</span>
         </button>
 
-        {/* Пошук desktop */}
         <div className="hidden md:flex flex-1 max-w-md" ref={wrapperRef}>
           <div className="relative w-full">
             <div className="relative flex items-center">
@@ -163,22 +162,16 @@ export default function Header() {
                 className="w-full pl-9 pr-4 py-2 text-sm text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                 autoComplete="off"
               />
-              {isLoading && (
-                <span className="absolute right-3 text-gray-300 text-xs animate-pulse">●</span>
-              )}
+              {isLoading && <span className="absolute right-3 text-gray-300 text-xs animate-pulse">●</span>}
             </div>
 
             {showDropdown && suggestions.length > 0 && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
                 {suggestions.map((s, i) => (
-                  <button
-                    key={`${s.type}-${s.id}`}
+                  <button key={`${s.type}-${s.id}`}
                     onMouseDown={() => selectSuggestion(s)}
                     onMouseEnter={() => setActiveIndex(i)}
-                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                      i === activeIndex ? "bg-blue-50" : "hover:bg-gray-50"
-                    } ${i !== 0 ? "border-t border-gray-100" : ""}`}
-                  >
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${i === activeIndex ? "bg-blue-50" : "hover:bg-gray-50"} ${i !== 0 ? "border-t border-gray-100" : ""}`}>
                     <span className="text-base flex-shrink-0">{TYPE_ICON[s.type]}</span>
                     <div className="flex-1 min-w-0">
                       <span className="text-sm text-gray-900 font-medium truncate block">{s.label}</span>
@@ -189,10 +182,8 @@ export default function Header() {
                     </span>
                   </button>
                 ))}
-                <button
-                  onMouseDown={() => { setShowDropdown(false); navigate("search"); }}
-                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-blue-600 hover:bg-blue-50 border-t border-gray-100 font-medium"
-                >
+                <button onMouseDown={() => { setShowDropdown(false); navigate("search"); }}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-blue-600 hover:bg-blue-50 border-t border-gray-100 font-medium">
                   <span>🔍</span>
                   <span>Всі результати для «{searchQuery}»</span>
                 </button>
@@ -295,14 +286,13 @@ export default function Header() {
           <input
             value={searchQuery}
             onChange={e => handleSearchChange(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter") { navigate("search"); setMobileOpen(false); }}}
+            onKeyDown={e => { if (e.key === "Enter") { navigate("search"); setMobileOpen(false); } }}
             placeholder="Пошук…"
             className="w-full px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-lg mb-3 focus:outline-none bg-white"
           />
           <nav className="flex flex-col gap-1">
             {navLinks.map(l => (
-              <button key={l.page}
-                onClick={() => { navigate(l.page); setMobileOpen(false); }}
+              <button key={l.page} onClick={() => { navigate(l.page); setMobileOpen(false); }}
                 className="text-left px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg">
                 {l.label}
               </button>
