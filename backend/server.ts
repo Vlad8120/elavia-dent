@@ -109,59 +109,60 @@ app.get("/api/search", async (req: any, res: any) => {
   }
 });
 
-//  AI АСИСТЕНТ ПРОКСІ через Gemini 
+//  AI АСИСТЕНТ ПРОКСІ через Claude
 app.post("/api/ai-chat", async (req: any, res: any) => {
   try {
     const { messages = [], systemPrompt = "" } = req.body;
-    const apiKey = process.env.GEMINI_API_KEY || "";
+    const apiKey = process.env.ANTHROPIC_API_KEY || "";
 
     console.log(
-      "GEMINI KEY exists:",
-      !!process.env.GEMINI_API_KEY,
+      "ANTHROPIC KEY exists:",
+      !!process.env.ANTHROPIC_API_KEY,
       "length:",
-      (process.env.GEMINI_API_KEY || "").length
+      (process.env.ANTHROPIC_API_KEY || "").length
     );
 
     if (!apiKey) {
       return res.status(500).json({
         success: false,
-        text: "GEMINI_API_KEY не налаштовано на сервері",
+        text: "ANTHROPIC_API_KEY не налаштовано на сервері",
       });
     }
 
-    const contents = messages
+    const cleanMessages = messages
       .filter((m: any) => m?.role !== "system" && m?.content)
       .map((m: any) => ({
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: String(m.content) }],
+        role: m.role === "assistant" ? "assistant" : "user",
+        content: String(m.content),
       }));
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          system_instruction: {
-            parts: [{ text: String(systemPrompt || "") }],
-          },
-          contents,
-        }),
-      }
-    );
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-3-5-haiku-latest",
+        max_tokens: 1000,
+        system: String(systemPrompt || ""),
+        messages: cleanMessages,
+      }),
+    });
 
     const data = await response.json();
 
     if (!response.ok) {
-      console.error("Gemini API error:", data);
+      console.error("Claude API error:", data);
       return res.status(response.status).json({
         success: false,
-        text: data.error?.message || "Помилка Gemini API",
+        text: data.error?.message || "Помилка Claude API",
       });
     }
 
     const text =
-      data.candidates?.[0]?.content?.parts
+      data.content
         ?.map((part: any) => part.text || "")
         .join("")
         .trim() || "Помилка відповіді";
@@ -172,7 +173,6 @@ app.post("/api/ai-chat", async (req: any, res: any) => {
     res.status(500).json({ success: false, text: "Помилка сервера" });
   }
 });
-
 
 app.use("/api/products", productsRouter);
 app.use("/api/clinics", clinicsRouter);
