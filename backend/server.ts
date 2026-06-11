@@ -19,7 +19,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "elavia_dent_secret_key_2025";
 app.use(cors());
 app.use(express.json());
 
-//  AUTOCOMPLETE 
+// AUTOCOMPLETE
 app.get("/api/search/autocomplete", async (req: any, res: any) => {
   try {
     const query = String(req.query.q || "").trim();
@@ -52,12 +52,12 @@ app.get("/api/search/autocomplete", async (req: any, res: any) => {
     ];
 
     res.json({ success: true, data: suggestions });
-  } catch (error) {
+  } catch {
     res.status(500).json({ success: false, data: [] });
   }
 });
 
-//  ІНТЕЛЕКТУАЛЬНИЙ ПОШУК 
+// ІНТЕЛЕКТУАЛЬНИЙ ПОШУК
 app.get("/api/search", async (req: any, res: any) => {
   try {
     const query = String(req.query.q || "").trim();
@@ -104,29 +104,19 @@ app.get("/api/search", async (req: any, res: any) => {
       success: true,
       data: { products, clinics, services, total: products.length + clinics.length + services.length, query },
     });
-  } catch (error) {
+  } catch {
     res.status(500).json({ success: false, message: "Помилка пошуку" });
   }
 });
 
-//  AI АСИСТЕНТ ПРОКСІ через Claude
+// AI АСИСТЕНТ ПРОКСІ через Claude
 app.post("/api/ai-chat", async (req: any, res: any) => {
   try {
     const { messages = [], systemPrompt = "" } = req.body;
     const apiKey = process.env.ANTHROPIC_API_KEY || "";
 
-    console.log(
-      "ANTHROPIC KEY exists:",
-      !!process.env.ANTHROPIC_API_KEY,
-      "length:",
-      (process.env.ANTHROPIC_API_KEY || "").length
-    );
-
     if (!apiKey) {
-      return res.status(500).json({
-        success: false,
-        text: "ANTHROPIC_API_KEY не налаштовано на сервері",
-      });
+      return res.status(500).json({ success: false, text: "API ключ не налаштовано" });
     }
 
     const cleanMessages = messages
@@ -152,25 +142,20 @@ app.post("/api/ai-chat", async (req: any, res: any) => {
     });
 
     const data = await response.json();
+    console.log("Claude response:", JSON.stringify(data).slice(0, 200));
 
     if (!response.ok) {
-      console.error("Claude API error:", data);
       return res.status(response.status).json({
         success: false,
-        text: data.error?.message || "Помилка Claude API",
+        text: `Помилка API: ${JSON.stringify(data.error || data)}`,
       });
     }
 
-    const text =
-      data.content
-        ?.map((part: any) => part.text || "")
-        .join("")
-        .trim() || "Помилка відповіді";
-
+    const text = data.content?.[0]?.text?.trim() || "Помилка відповіді";
     res.json({ success: true, text });
-  } catch (error) {
+  } catch (error: any) {
     console.error("AI chat error:", error);
-    res.status(500).json({ success: false, text: "Помилка сервера" });
+    res.status(500).json({ success: false, text: "Помилка сервера: " + error.message });
   }
 });
 
