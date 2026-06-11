@@ -57,59 +57,105 @@ app.get("/api/search/autocomplete", async (req: any, res: any) => {
   }
 });
 
-// ІНТЕЛЕКТУАЛЬНИЙ ПОШУК
+// ІНТЕЛЕКТУАЛЬНИЙ ПОШУК з FTS
 app.get("/api/search", async (req: any, res: any) => {
   try {
     const query = String(req.query.q || "").trim();
     if (!query) return res.json({ success: true, data: { products: [], clinics: [], services: [], total: 0 } });
 
-    const [products, clinics, services] = await Promise.all([
-      prisma.product.findMany({
-        where: {
-          OR: [
-            { title: { contains: query, mode: "insensitive" } },
-            { description: { contains: query, mode: "insensitive" } },
-            { city: { contains: query, mode: "insensitive" } },
-            { oblast: { contains: query, mode: "insensitive" } },
-          ],
-        },
+    const words = query.split(/\s+/).filter(Boolean);
+    const tsQuery = words.map(w => `${w}:*`).join(" & ");
+
+    let products: any[] = [];
+    let clinics: any[] = [];
+    let services: any[] = [];
+
+    try {
+      const ftsProducts = await prisma.$queryRaw`
+        SELECT p.*, c.name as category_name, c.icon as category_icon,
+          u.name as seller_name, u.city as seller_city,
+          ts_rank(p.search_vector, to_tsquery('simple', ${tsQuery})) as rank
+        FROM "Product" p
+        LEFT JOIN "Category" c ON p."categoryId" = c.id
+        LEFT JOIN "User" u ON p."sellerId" = u.id
+        WHERE p.search_vector @@ to_tsquery('simple', ${tsQuery})
+           OR p.title ILIKE ${'%' + query + '%'}
+           OR p.city ILIKE ${'%' + query + '%'}
+        ORDER BY rank DESC, p.views DESC
+        LIMIT 20
+      ` as any[];
+      products = ftsProducts.map(p => ({
+        id: p.id, title: p.title, description: p.description,
+        price: Number(p.price), city: p.city, oblast: p.oblast,
+        condition: p.condition, image: p.image, views: p.views,
+        categoryId: p.categoryId, sellerId: p.sellerId,
+        category: { name: p.category_name, icon: p.category_icon },
+        seller: { name: p.seller_name, city: p.seller_city },
+        rank: Number(p.rank || 0),
+      }));
+    } catch {
+      products = await prisma.product.findMany({
+        where: { OR: [{ title: { contains: query, mode: "insensitive" } }, { city: { contains: query, mode: "insensitive" } }] },
         include: { category: true, seller: { select: { id: true, name: true, city: true } } },
-        orderBy: { views: "desc" },
-        take: 20,
-      }),
-      prisma.clinic.findMany({
-        where: {
-          OR: [
-            { name: { contains: query, mode: "insensitive" } },
-            { description: { contains: query, mode: "insensitive" } },
-            { city: { contains: query, mode: "insensitive" } },
-            { address: { contains: query, mode: "insensitive" } },
-          ],
-        },
-        orderBy: { rating: "desc" },
-        take: 10,
-      }),
-      prisma.service.findMany({
-        where: {
-          OR: [
-            { name: { contains: query, mode: "insensitive" } },
-            { description: { contains: query, mode: "insensitive" } },
-          ],
-        },
-        take: 10,
-      }),
-    ]);
+        orderBy: { views: "desc" }, take: 20,
+      });
+    }
+
+    try {
+      const ftsClinics = await prisma.$queryRaw`
+        SELECT c.*,
+          ts_rank(c.search_vector, to_tsquery('simple', ${tsQuery})) as rank
+        FROM "Clinic" c
+        WHERE c.search_vector @@ to_tsquery('simple', ${tsQuery})
+           OR c.name ILIKE ${'%' + query + '%'}
+           OR c.city ILIKE ${'%' + query + '%'}
+        ORDER BY rank DESC, c.rating DESC
+        LIMIT 10
+      ` as any[];
+      clinics = ftsClinics.map(c => ({
+        id: c.id, name: c.name, description: c.description,
+        city: c.city, address: c.address, phone: c.phone,
+        email: c.email, image: c.image, rating: Number(c.rating),
+        doctors: c.doctors, founded: c.founded, rank: Number(c.rank || 0),
+      }));
+    } catch {
+      clinics = await prisma.clinic.findMany({
+        where: { OR: [{ name: { contains: query, mode: "insensitive" } }, { city: { contains: query, mode: "insensitive" } }] },
+        orderBy: { rating: "desc" }, take: 10,
+      });
+    }
+
+    try {
+      const ftsServices = await prisma.$queryRaw`
+        SELECT s.*,
+          ts_rank(s.search_vector, to_tsquery('simple', ${tsQuery})) as rank
+        FROM "Service" s
+        WHERE s.search_vector @@ to_tsquery('simple', ${tsQuery})
+           OR s.name ILIKE ${'%' + query + '%'}
+        ORDER BY rank DESC
+        LIMIT 10
+      ` as any[];
+      services = ftsServices.map(s => ({
+        id: s.id, name: s.name, description: s.description,
+        priceFrom: Number(s.priceFrom), priceTo: Number(s.priceTo),
+        duration: s.duration, rank: Number(s.rank || 0),
+      }));
+    } catch {
+      services = await prisma.service.findMany({
+        where: { name: { contains: query, mode: "insensitive" } }, take: 10,
+      });
+    }
 
     res.json({
       success: true,
       data: { products, clinics, services, total: products.length + clinics.length + services.length, query },
     });
-  } catch {
+  } catch (error) {
     res.status(500).json({ success: false, message: "Помилка пошуку" });
   }
 });
 
-// AI АСИСТЕНТ ПРОКСІ через Claude
+// AI АСИСТЕНТ
 app.post("/api/ai-chat", async (req: any, res: any) => {
   try {
     const { messages = [], systemPrompt = "" } = req.body;
@@ -118,6 +164,10 @@ app.post("/api/ai-chat", async (req: any, res: any) => {
     if (!apiKey) {
       return res.status(500).json({ success: false, text: "API ключ не налаштовано" });
     }
+
+    const fullSystemPrompt = systemPrompt + `
+
+10. НЕ використовуй markdown розмітку — ніяких **, ##, *, _, або інших символів форматування. Пиши чистим текстом без будь-яких спеціальних символів.`;
 
     const cleanMessages = messages
       .filter((m: any) => m?.role !== "system" && m?.content)
@@ -136,13 +186,12 @@ app.post("/api/ai-chat", async (req: any, res: any) => {
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 1000,
-        system: String(systemPrompt || ""),
+        system: fullSystemPrompt,
         messages: cleanMessages,
       }),
     });
 
     const data = await response.json();
-    console.log("Claude response:", JSON.stringify(data).slice(0, 200));
 
     if (!response.ok) {
       return res.status(response.status).json({
@@ -154,7 +203,6 @@ app.post("/api/ai-chat", async (req: any, res: any) => {
     const text = data.content?.[0]?.text?.trim() || "Помилка відповіді";
     res.json({ success: true, text });
   } catch (error: any) {
-    console.error("AI chat error:", error);
     res.status(500).json({ success: false, text: "Помилка сервера: " + error.message });
   }
 });
